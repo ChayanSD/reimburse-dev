@@ -116,7 +116,7 @@ export async function GET(request : NextRequest) {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) : Promise<NextResponse> {
   try {
     const session = await getSession();
     if (!session) {
@@ -144,44 +144,73 @@ export async function POST(request: Request) {
 
     const { file_url, merchant_name, receipt_date, amount, category, note, currency } = validation.data;
 
-    // Check for duplicate receipts (same merchant, amount, date within 90 days)
-    const ninetyDaysAgo = new Date();
-    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-
-    const duplicateCheck = await prisma.receipt.findFirst({
+    // Check for existing OCR-processed receipt with the same file URL
+    // If found, update it instead of creating a duplicate
+    let receipt = await prisma.receipt.findFirst({
       where: {
         userId,
-        merchantName: merchant_name,
-        amount,
-        receiptDate: new Date(receipt_date),
-        createdAt: {
-          gt: ninetyDaysAgo,
-        },
-      },
-    });
-
-    if (duplicateCheck) {
-      return NextResponse.json({
-        error: "Duplicate receipt detected",
-        fieldErrors: {
-          general: "A receipt with the same merchant, amount, and date already exists within the last 90 days"
-        }
-      }, { status: 409 });
-    }
-
-    const receipt = await prisma.receipt.create({
-      data: {
-        userId,
-        fileName : file_url.split("/").pop() || "",
         fileUrl: file_url,
-        merchantName: merchant_name,
-        receiptDate: new Date(receipt_date),
-        amount,
-        category,
-        note: note || null,
-        currency,
+        status: { in: ['pending', 'completed'] }
       },
     });
+
+    if (receipt) {
+      // Update existing OCR-processed receipt
+      receipt = await prisma.receipt.update({
+        where: { id: receipt.id },
+        data: {
+          merchantName: merchant_name,
+          receiptDate: new Date(receipt_date),
+          amount,
+          category,
+          note: note || null,
+          currency,
+          status: 'completed', // Mark as completed since user has reviewed and confirmed
+          updatedAt: new Date(),
+        },
+      });
+    } else {
+      // Check for duplicate receipts (same merchant, amount, date within 90 days) for new receipts only
+      const ninetyDaysAgo = new Date();
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
+      const duplicateCheck = await prisma.receipt.findFirst({
+        where: {
+          userId,
+          merchantName: merchant_name,
+          amount,
+          receiptDate: new Date(receipt_date),
+          createdAt: {
+            gt: ninetyDaysAgo,
+          },
+        },
+      });
+
+      if (duplicateCheck) {
+        return NextResponse.json({
+          error: "Duplicate receipt detected",
+          fieldErrors: {
+            general: "A receipt with the same merchant, amount, and date already exists within the last 90 days"
+          }
+        }, { status: 409 });
+      }
+
+      // Create new receipt for manual entry
+      receipt = await prisma.receipt.create({
+        data: {
+          userId,
+          fileName : file_url.split("/").pop() || "",
+          fileUrl: file_url,
+          merchantName: merchant_name,
+          receiptDate: new Date(receipt_date),
+          amount,
+          category,
+          note: note || null,
+          currency,
+          status: 'completed',
+        },
+      });
+    }
 
     // Increment usage counter
     await incrementUsage(userId, 'receipt_uploads');

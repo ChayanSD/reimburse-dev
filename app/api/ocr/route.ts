@@ -6,6 +6,7 @@ import { sanitizeUrl, sanitizeText } from "@/lib/sanitize";
 import { getSession } from "@/lib/session";
 import prisma from "@/lib/prisma";
 import { redis } from "@/lib/redis";
+import { checkSubscriptionLimit, incrementUsage } from "@/lib/subscriptionGuard";
 
 export const runtime = "nodejs";
 export const maxDuration = 10; // Vercel serverless function timeout
@@ -27,6 +28,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (!validation.success) return handleValidationError(validation.error);
 
     const { file_url, filename } = validation.data;
+
+    // Check subscription limits for OCR processing (receipt uploads)
+    const subscriptionCheck = await checkSubscriptionLimit(userId, 'receipt_uploads');
+    if (!subscriptionCheck.allowed) {
+      return NextResponse.json({
+        error: subscriptionCheck.reason || 'Subscription limit reached',
+        upgradeRequired: subscriptionCheck.upgradeRequired,
+        currentTier: subscriptionCheck.currentTier,
+      }, { status: 402 });
+    }
 
     // Sanitize inputs
     const sanitizedFileUrl = sanitizeUrl(file_url);
@@ -59,6 +70,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           note: parsedCache.extraction_notes,
         },
       });
+
+      // Increment usage counter for cached OCR result
+      await incrementUsage(userId, 'receipt_uploads');
 
       return NextResponse.json({
         success: true,
