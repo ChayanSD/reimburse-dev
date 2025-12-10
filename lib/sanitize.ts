@@ -1,65 +1,57 @@
-import DOMPurify from 'isomorphic-dompurify';
-
-// Sanitize HTML input to prevent XSS
+// Remove all HTML/script/style tags safely
 export function sanitizeHtml(input: string): string {
-  if (typeof input !== 'string') {
-    return '';
-  }
-  
-  return DOMPurify.sanitize(input, {
-    ALLOWED_TAGS: [],
-    ALLOWED_ATTR: [],
-    KEEP_CONTENT: true,
-  });
-}
+  if (typeof input !== "string") return "";
 
-// Sanitize text input (remove HTML tags)
-export function sanitizeText(input: string): string {
-  if (typeof input !== 'string') {
-    return '';
-  }
-  
   return input
-    .replace(/<[^>]*>/g, '') // Remove HTML tags
-    .replace(/&[^;]+;/g, '') // Remove HTML entities
+    // Remove script/style blocks entirely
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, "")
+    // Remove all remaining HTML tags
+    .replace(/<[^>]+>/g, "")
+    // Decode basic HTML entities (&amp; → &, &lt; → <)
+    .replace(/&[a-z]+;/gi, "")
     .trim();
 }
 
-// Sanitize filename
-export function sanitizeFilename(filename: string): string {
-  if (typeof filename !== 'string') {
-    return 'unknown';
-  }
-  
-  return filename
-    .replace(/[^a-zA-Z0-9.-]/g, '_') // Replace special chars with underscore
-    .replace(/_{2,}/g, '_') // Replace multiple underscores with single
-    .substring(0, 255); // Limit length
+// Similar to HTML sanitize, but stricter for plain text
+export function sanitizeText(input: string): string {
+  if (typeof input !== "string") return "";
+  return input
+    .replace(/<[^>]*>/g, "")   // Remove tags
+    .replace(/&[^;]+;/g, "")   // Remove HTML entities
+    .trim();
 }
 
-// Sanitize email
+// Clean filename to prevent injection, traversal, weird characters
+export function sanitizeFilename(filename: string): string {
+  if (typeof filename !== "string") return "unknown";
+
+  return filename
+    .replace(/[^a-zA-Z0-9._-]/g, "_")  // Allow alphanumeric, dot, dash, underscore
+    .replace(/_{2,}/g, "_")            // Collapse multiple underscores
+    .replace(/^\.+/, "")               // Prevent ".env" or "." filenames
+    .substring(0, 255);                // Avoid filesystem issues
+}
+
+// Lowercase + trimmed email
 export function sanitizeEmail(email: string): string {
-  if (typeof email !== 'string') {
-    return '';
-  }
-  
+  if (typeof email !== "string") return "";
   return email.toLowerCase().trim();
 }
 
-// Sanitize URL
+// URL sanitizer that enforces http/https only
 export function sanitizeUrl(url: string): string {
-  if (typeof url !== 'string') {
-    return '';
-  }
-  
+  if (typeof url !== "string") return "";
+
   try {
-    const urlObj = new URL(url);
-    // Only allow http and https protocols
-    if (urlObj.protocol !== 'http:' && urlObj.protocol !== 'https:') {
-      return '';
+    const parsed = new URL(url);
+
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return "";
     }
-    return urlObj.toString();
+
+    return parsed.toString();
   } catch {
-    return '';
+    return "";
   }
 }
