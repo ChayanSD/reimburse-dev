@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/hooks/useAuth";
 import axios from "axios";
@@ -8,12 +8,13 @@ import Image from "next/image";
 import toast from "react-hot-toast";
 import {
   Building2,
-  Plus,
   Save,
   Trash2,
   Edit3,
   Star,
   StarOff,
+  Menu,
+  X,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -129,6 +130,8 @@ export default function CompanySettingsPage() {
     settingId: null,
     settingInfo: "",
   });
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
   const [formData, setFormData] = useState<FormData>({
     setting_name: "",
     company_name: "",
@@ -145,6 +148,27 @@ export default function CompanySettingsPage() {
     notes: "",
     is_default: false,
   });
+
+  // Close mobile menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        mobileMenuRef.current &&
+        !mobileMenuRef.current.contains(event.target as Node) &&
+        !(event.target as HTMLElement).closest('button[aria-label="Toggle menu"]')
+      ) {
+        setMobileMenuOpen(false);
+      }
+    };
+
+    if (mobileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [mobileMenuOpen]);
 
   // React Query hooks
   const {
@@ -375,44 +399,80 @@ export default function CompanySettingsPage() {
         style={{ fontFamily: "Inter, system-ui, sans-serif" }}
       >
         {/* Header */}
-        <header className="bg-white border-b border-gray-200 px-6 py-4">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <div className="flex items-center space-x-3">
+        <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4 relative">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+            <div className="flex items-center space-x-3 flex-1 min-w-0">
               <Image
                 src="https://ucarecdn.com/6b43f5cf-10b4-4838-b2ba-397c0a896734/-/format/auto/"
                 alt="ReimburseMe Logo"
-                className="w-10 h-10"
+                className="w-8 h-8 sm:w-10 sm:h-10 shrink-0"
                 width={40}
                 height={40}
               />
-              <div>
+              <div className="min-w-0 flex-1">
                 <h1
-                  className="text-xl font-bold text-gray-900"
+                  className="text-lg sm:text-xl font-bold text-gray-900"
                   style={{ fontFamily: "Poppins, sans-serif" }}
                 >
                   Company Settings
                 </h1>
-                <p className="text-sm text-gray-600">
+                <p className="text-xs sm:text-sm text-gray-600 hidden sm:block">
                   Manage your company and client details for expense reports
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center space-x-4">
+            {/* Desktop Navigation */}
+            <div className="hidden sm:flex items-center space-x-4 shrink-0">
               <Link
                 href="/dashboard"
-                className="text-gray-600 hover:text-gray-800 font-medium"
+                className="text-base text-gray-600 hover:text-gray-800 font-medium whitespace-nowrap"
               >
                 Back to Dashboard
               </Link>
               <Link
                 href="/account/logout"
-                className="text-gray-600 hover:text-gray-800 font-medium"
+                className="text-base text-gray-600 hover:text-gray-800 font-medium whitespace-nowrap"
               >
                 Sign Out
               </Link>
             </div>
+
+            {/* Mobile Burger Menu Button */}
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="sm:hidden p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+              aria-label="Toggle menu"
+            >
+              {mobileMenuOpen ? (
+                <X size={24} />
+              ) : (
+                <Menu size={24} />
+              )}
+            </button>
           </div>
+
+          {/* Mobile Menu Dropdown */}
+          {mobileMenuOpen && (
+            <div ref={mobileMenuRef} className="sm:hidden absolute top-full left-0 right-0 bg-white border-b border-gray-200 shadow-lg z-50">
+              <div className="px-4 py-3 space-y-3">
+                <Link
+                  href="/dashboard"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block px-4 py-2 text-gray-700 hover:bg-gray-50 hover:text-gray-900 font-medium rounded-lg transition-colors"
+                >
+                  Dashboard
+                </Link>
+                <Link
+                  href="/account/logout"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block px-4 py-2 text-gray-700 hover:bg-gray-50 hover:text-gray-900 font-medium rounded-lg transition-colors"
+                >
+                  Sign Out
+                </Link>
+              </div>
+            </div>
+          )}
         </header>
 
         {/* Main Content */}
@@ -424,19 +484,6 @@ export default function CompanySettingsPage() {
                 <h2 className="text-2xl font-semibold text-gray-900">
                   Your Company Settings
                 </h2>
-                <button
-                  onClick={() => {
-                    resetForm();
-                    setFormData((prev) => ({
-                      ...prev,
-                      setting_name: `company_${Date.now()}`,
-                    }));
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 bg-[#2E86DE] hover:bg-[#2574C7] text-white font-medium rounded-2xl transition-colors"
-                >
-                  <Plus size={18} />
-                  Add New Company
-                </button>
               </div>
 
               {loading ? (

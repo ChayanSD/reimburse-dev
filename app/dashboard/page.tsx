@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import useUser from "@/utils/useUser";
@@ -19,6 +19,7 @@ import {
   AlertCircle,
   Settings,
   LogOut,
+  Menu,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -47,6 +48,7 @@ interface User {
   email: string;
   first_name?: string;
   last_name?: string;
+  name?: string;
   is_admin?: boolean;
 }
 
@@ -131,18 +133,7 @@ const generateReport = async (reportData: ReportData): Promise<{ download_url: s
 const getUserDisplayName = (user: User | null): string => {
   if (!user) return "";
 
-  const firstName = user.first_name?.trim();
-  const lastName = user.last_name?.trim();
-
-  if (firstName && lastName) {
-    return `${firstName} ${lastName}`;
-  } else if (firstName) {
-    return firstName;
-  } else if (lastName) {
-    return lastName;
-  } else {
-    return user.email;
-  }
+return user.name || "";
 };
 
 // Toast notification component
@@ -237,6 +228,29 @@ export default function DashboardPage() {
     receiptId: null,
     receiptInfo: "",
   });
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close mobile menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        mobileMenuRef.current &&
+        !mobileMenuRef.current.contains(event.target as Node) &&
+        !(event.target as HTMLElement).closest('button[aria-label="Toggle menu"]')
+      ) {
+        setMobileMenuOpen(false);
+      }
+    };
+
+    if (mobileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [mobileMenuOpen]);
 
   // Queries
   const {
@@ -574,63 +588,118 @@ export default function DashboardPage() {
         style={{ fontFamily: "Inter, system-ui, sans-serif" }}
       >
         {/* Header */}
-        <header className="bg-white border-b border-gray-200 px-6 py-4">
+        <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4 relative">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-3 flex-1 min-w-0">
               <Image
                 src="https://ucarecdn.com/6b43f5cf-10b4-4838-b2ba-397c0a896734/-/format/auto/"
                 alt="ReimburseMe Logo"
-                className="w-10 h-10"
+                className="w-8 h-8 sm:w-10 sm:h-10 shrink-0"
                 height={40}
                 width={40}
               />
-              <div>
+              <div className="min-w-0 flex-1">
                 <h1
-                  className="text-xl font-bold text-gray-900"
+                  className="text-lg sm:text-xl font-bold text-gray-900"
                   style={{ fontFamily: "Poppins, sans-serif" }}
                 >
                   ReimburseMe
                 </h1>
-                <p className="text-sm text-gray-600">
+                <p className="text-xs sm:text-sm text-gray-600">
                   Welcome back, {getUserDisplayName(user as User)}
                 </p>
               </div>
             </div>
 
-            <div className="flex flex-col md:flex-row items-start md:items-center space-y-2 md:space-y-0 md:space-x-4">
+            {/* Desktop Navigation */}
+            <div className="hidden md:flex items-center space-x-4 shrink-0">
               <Link
                 href="/company-settings"
-                className="flex items-center gap-2 text-gray-600 hover:text-gray-800 font-medium text-sm md:text-base"
+                className="flex items-center gap-2 text-gray-600 hover:text-gray-800 font-medium text-base"
                 title="Company Settings"
               >
                 <Settings size={18} />
-                <span className="hidden md:inline">Company Settings</span>
+                Company Settings
               </Link>
               {(user as User)?.is_admin && (
                 <Link
                   href="/admin"
-                  className="text-gray-600 hover:text-gray-800 font-medium text-sm md:text-base"
+                  className="text-gray-600 hover:text-gray-800 font-medium text-base"
                 >
                   Admin
                 </Link>
               )}
               <Link
                 href="/upload"
-                className="flex items-center gap-2 px-3 md:px-4 py-2 bg-[#2E86DE] hover:bg-[#2574C7] text-white font-medium rounded-2xl transition-colors text-sm md:text-base"
+                className="flex items-center gap-2 px-4 py-2 bg-[#2E86DE] hover:bg-[#2574C7] text-white font-medium rounded-2xl transition-colors text-base"
               >
                 <Plus size={18} />
-                <span className="hidden sm:inline">Upload Receipt</span>
+                Upload Receipt
               </Link>
               <Link
                 href="/account/logout"
-                className="flex items-center gap-2 text-gray-600 hover:text-gray-800 font-medium text-sm md:text-base"
+                className="flex items-center gap-2 text-gray-600 hover:text-gray-800 font-medium text-base"
                 title="Sign Out"
               >
                 <LogOut size={18} />
-                <span className="hidden md:inline">Sign Out</span>
+                Sign Out
               </Link>
             </div>
+
+            {/* Mobile Burger Menu Button */}
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+              aria-label="Toggle menu"
+            >
+              {mobileMenuOpen ? (
+                <X size={24} />
+              ) : (
+                <Menu size={24} />
+              )}
+            </button>
           </div>
+
+          {/* Mobile Menu Dropdown */}
+          {mobileMenuOpen && (
+            <div ref={mobileMenuRef} className="md:hidden absolute top-full left-0 right-0 bg-white border-b border-gray-200 shadow-lg z-50">
+              <div className="px-4 py-3 space-y-2">
+                <Link
+                  href="/company-settings"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-gray-900 font-medium rounded-lg transition-colors"
+                >
+                  <Settings size={20} />
+                  Company Settings
+                </Link>
+                {(user as User)?.is_admin && (
+                  <Link
+                    href="/admin"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="block px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-gray-900 font-medium rounded-lg transition-colors"
+                  >
+                    Admin
+                  </Link>
+                )}
+                <Link
+                  href="/upload"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-4 py-3 bg-[#2E86DE] hover:bg-[#2574C7] text-white font-medium rounded-lg transition-colors"
+                >
+                  <Plus size={20} />
+                  Upload Receipt
+                </Link>
+                <Link
+                  href="/account/logout"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-gray-900 font-medium rounded-lg transition-colors"
+                >
+                  <LogOut size={20} />
+                  Sign Out
+                </Link>
+              </div>
+            </div>
+          )}
         </header>
 
         {/* Main Content */}
