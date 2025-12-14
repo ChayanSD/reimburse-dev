@@ -1,4 +1,6 @@
 import { SessionUser } from './session';
+import { signInWithPopup , onAuthStateChanged} from 'firebase/auth';
+import { auth, googleProvider } from './firebase';
 
 export interface AuthState {
   user: SessionUser | null;
@@ -16,7 +18,18 @@ export class AuthClient {
   };
   private listeners: ((state: AuthState) => void)[] = [];
 
-  private constructor() {}
+  private constructor() {
+  onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      await this.fetchUser();
+    } else {
+      this.authState.user = null;
+      this.authState.isAuthenticated = false;
+      this.authState.isLoading = false;
+      this.notify();
+    }
+  });
+}
 
   static getInstance(): AuthClient {
     if (!AuthClient.instance) {
@@ -123,10 +136,39 @@ export class AuthClient {
     }
   }
 
+  // Sign in with Google
+  async signInWithGoogle(): Promise<{ success: boolean; error?: string }> {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const idToken = await result.user.getIdToken();
+
+      const response = await fetch('/api/auth/google', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ idToken }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        await this.fetchUser(); // Refresh user state
+        return { success: true };
+      } else {
+        return { success: false, error: data.error };
+      }
+    } catch (error) {
+      console.error('Google sign in failed:', error);
+      return { success: false, error: 'Google sign in failed' };
+    }
+  }
+
   // Logout
   async logout(): Promise<void> {
     try {
-      await fetch('/api/auth/logout', { 
+      await fetch('/api/auth/logout', {
         method: 'POST',
         credentials: 'include'
       });
