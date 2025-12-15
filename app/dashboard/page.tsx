@@ -41,6 +41,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 
@@ -231,6 +232,7 @@ export default function DashboardPage() {
     receiptInfo: "",
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [selectedReceipts, setSelectedReceipts] = useState<string[]>([]);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
   // Close mobile menu when clicking outside
@@ -450,7 +452,17 @@ export default function DashboardPage() {
     });
   };
 
+  const handleSelectReceipt = useCallback((id: string, checked: boolean) => {
+    setSelectedReceipts(prev => checked ? [...prev, id] : prev.filter(rid => rid !== id));
+  }, []);
+
+  const handleSelectAll = useCallback((checked: boolean) => {
+    setSelectedReceipts(checked ? receipts.map(r => r.id) : []);
+  }, [receipts]);
+
   const handleGenerateReport = async (format: "csv" | "pdf") => {
+    const receiptsToExport = selectedReceipts.length > 0 ? receipts.filter(r => selectedReceipts.includes(r.id)) : receipts;
+
     // Calculate date range based on filters
     const now = new Date();
     let startDate: Date;
@@ -474,8 +486,8 @@ export default function DashboardPage() {
         break;
       default:
         // "all" - use earliest receipt date or 90 days ago, whichever is later
-        if (receipts.length > 0) {
-          const dates = receipts
+        if (receiptsToExport.length > 0) {
+          const dates = receiptsToExport
             .map(r => r.receipt_date ? new Date(r.receipt_date) : null)
             .filter((d): d is Date => d !== null && !isNaN(d.getTime()));
           startDate = dates.length > 0 ? new Date(Math.min(...dates.map(d => d.getTime()))) : new Date(now.getFullYear(), now.getMonth() - 3, 1);
@@ -489,7 +501,7 @@ export default function DashboardPage() {
     const formatDate = (date: Date) => date.toISOString().split('T')[0];
 
     const reportData: ReportData = {
-      receipt_ids: receipts.map((r) => Number(r.id)), // Convert string to number
+      receipt_ids: receiptsToExport.map((r) => Number(r.id)), // Convert string to number
       period_start: formatDate(startDate),
       period_end: formatDate(endDate),
       format,
@@ -1062,6 +1074,20 @@ export default function DashboardPage() {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <Checkbox
+                          checked={
+                            receipts.length === 0
+                              ? false
+                              : selectedReceipts.length === receipts.length
+                              ? true
+                              : selectedReceipts.length > 0
+                              ? "indeterminate"
+                              : false
+                          }
+                          onCheckedChange={handleSelectAll}
+                        />
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Date
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1081,6 +1107,7 @@ export default function DashboardPage() {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {Array.from({ length: 5 }).map((_, i) => (
                       <tr key={i}>
+                        <td className="px-6 py-4 whitespace-nowrap"><Skeleton className="h-4 w-4" /></td>
                         <td className="px-6 py-4 whitespace-nowrap"><Skeleton className="h-4 w-20" /></td>
                         <td className="px-6 py-4 whitespace-nowrap"><Skeleton className="h-4 w-32" /></td>
                         <td className="px-6 py-4 whitespace-nowrap"><Skeleton className="h-4 w-16" /></td>
@@ -1126,6 +1153,20 @@ export default function DashboardPage() {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <Checkbox
+                          checked={
+                            receipts.length === 0
+                              ? false
+                              : selectedReceipts.length === receipts.length
+                              ? true
+                              : selectedReceipts.length > 0
+                              ? "indeterminate"
+                              : false
+                          }
+                          onCheckedChange={handleSelectAll}
+                        />
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Date
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1145,6 +1186,12 @@ export default function DashboardPage() {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {receipts.map((receipt) => (
                       <tr key={receipt.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <Checkbox
+                            checked={selectedReceipts.includes(receipt.id)}
+                            onCheckedChange={(checked) => handleSelectReceipt(receipt.id, checked as boolean)}
+                          />
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {receipt.receipt_date || "N/A"}
                         </td>
