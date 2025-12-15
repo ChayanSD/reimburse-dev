@@ -550,7 +550,7 @@ function UploadContent() {
                   disabled={uploadLoading}
                 />
 
-                <div className="w-16 h-16 bg-[#2E86DE] bg-opacity-10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <div className="w-16 h-16 bg-[#2E86DE]/20 bg-opacity-10 rounded-2xl flex items-center justify-center mx-auto mb-4">
                   <Upload size={32} className="text-[#2E86DE]" />
                 </div>
 
@@ -596,7 +596,7 @@ function UploadContent() {
                   Uploaded File
                 </h2>
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-[#2E86DE] bg-opacity-10 rounded-2xl flex items-center justify-center">
+                  <div className="w-12 h-12 bg-[#2E86DE]/20 bg-opacity-10 rounded-2xl flex items-center justify-center">
                     <FileText size={20} className="text-[#2E86DE]" />
                   </div>
                   <div className="flex-1">
@@ -621,7 +621,7 @@ function UploadContent() {
               {(isOcrLoading || processingStatus === "processing" || processingStatus === "uploading") && (
                 <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-200">
                   <div className="text-center mb-6">
-                    <div className="w-16 h-16 bg-[#2E86DE] bg-opacity-10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <div className="w-16 h-16 bg-[#2E86DE]/20 bg-opacity-10 rounded-2xl flex items-center justify-center mx-auto mb-4">
                       <Receipt size={32} className="text-[#2E86DE] animate-pulse" />
                     </div>
                     <h3 className="text-xl font-semibold text-gray-900 mb-2">

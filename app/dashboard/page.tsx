@@ -725,7 +725,7 @@ export default function DashboardPage() {
                 <h3 className="text-lg font-semibold text-gray-900">
                   Filtered Total
                 </h3>
-                <div className="w-10 h-10 bg-[#10B981] bg-opacity-10 rounded-2xl flex items-center justify-center">
+                <div className="w-10 h-10 bg-[#10B981]/20 bg-opacity-10 rounded-2xl flex items-center justify-center">
                   <FileText size={20} className="text-[#10B981]" />
                 </div>
               </div>
@@ -742,7 +742,7 @@ export default function DashboardPage() {
                 <h3 className="text-lg font-semibold text-gray-900">
                   Top Category
                 </h3>
-                <div className="w-10 h-10 bg-[#2E86DE] bg-opacity-10 rounded-2xl flex items-center justify-center">
+                <div className="w-10 h-10 bg-[#2E86DE]/20 bg-opacity-10 rounded-2xl flex items-center justify-center">
                   <Filter size={20} className="text-[#2E86DE]" />
                 </div>
               </div>
@@ -770,7 +770,7 @@ export default function DashboardPage() {
                 <h3 className="text-lg font-semibold text-gray-900">
                   All Time Total
                 </h3>
-                <div className="w-10 h-10 bg-[#8B5CF6] bg-opacity-10 rounded-2xl flex items-center justify-center">
+                <div className="w-10 h-10 bg-[#8B5CF6]/20 bg-opacity-10 rounded-2xl flex items-center justify-center">
                   <Receipt size={20} className="text-[#8B5CF6]" />
                 </div>
               </div>
