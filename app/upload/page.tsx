@@ -61,6 +61,7 @@ function UploadContent() {
   const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState<string>("");
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [emailNotificationSent, setEmailNotificationSent] = useState(false);
+  const [preparingReview, setPreparingReview] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
@@ -217,18 +218,24 @@ function UploadContent() {
           }
           
           setTimeout(() => {
-            const extractedData: ExtractedData = {
-              merchant_name: data.merchant_name,
-              amount: data.amount,
-              category: data.category,
-              receipt_date: data.receipt_date,
-              confidence: data.confidence,
-              currency: data.currency,
-              extraction_notes: data.notes,
-            };
-            setExtractedData(extractedData);
-            setEditedData(extractedData);
-            setProcessingStatus(null);
+            setProcessingStage("Preparing review form...");
+            setPreparingReview(true);
+            
+            setTimeout(() => {
+              const extractedData: ExtractedData = {
+                merchant_name: data.merchant_name,
+                amount: data.amount,
+                category: data.category,
+                receipt_date: data.receipt_date,
+                confidence: data.confidence,
+                currency: data.currency,
+                extraction_notes: data.notes,
+              };
+              setExtractedData(extractedData);
+              setEditedData(extractedData);
+              setPreparingReview(false);
+              setProcessingStatus(null);
+            }, 1500);
           }, 1000);
         } else if (status === "failed") {
           clearInterval(pollInterval);
@@ -493,6 +500,7 @@ function UploadContent() {
     setEstimatedTimeRemaining("");
     setStartTime(null);
     setEmailNotificationSent(false);
+    setPreparingReview(false);
   };
 
   // Loading states
@@ -598,7 +606,7 @@ function UploadContent() {
                 className="text-2xl font-bold text-gray-900 mb-3"
                 style={{ fontFamily: "Poppins, sans-serif" }}
               >
-                Receipt Saved Successfully!
+                🎉 Receipt Saved Successfully!
               </h2>
               
               <p className="text-gray-600 mb-4">
@@ -654,7 +662,7 @@ function UploadContent() {
 
                 <div className="relative">
                   <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 transition-all duration-300 ${
-                    dragActive
+                    dragActive 
                       ? 'bg-linear-to-br from-[#2E86DE] to-[#2574C7] shadow-lg transform scale-105'
                       : 'bg-[#2E86DE]/20'
                   }`}>
@@ -684,6 +692,7 @@ function UploadContent() {
 
                 <div className="text-gray-600 mb-6 space-y-2">
                   <p className="flex items-center justify-center gap-2">
+                    <span className="text-[#2E86DE]">✨</span>
                     Drag and drop your receipt or click to browse files
                   </p>
                   <p className="text-sm text-gray-500">
@@ -880,117 +889,166 @@ function UploadContent() {
               {/* Extracted Data Form */}
               {extractedData && editedData && (
                 <div className="bg-white rounded-3xl p-6 border border-gray-200">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                    Review & Edit Details
-                  </h2>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Merchant Name
-                      </label>
-                      <input
-                        type="text"
-                        value={editedData.merchant_name || ""}
-                        onChange={(e) =>
-                          setEditedData((prev) => ({
-                            ...prev!,
-                            merchant_name: e.target.value,
-                          }))
-                        }
-                        className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#2E86DE] focus:border-transparent"
-                        placeholder="Enter merchant name"
-                      />
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 bg-[#10B981]/20 rounded-xl flex items-center justify-center">
+                      <CheckCircle size={20} className="text-[#10B981]" />
                     </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Amount ($)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={String(editedData.amount || "")}
-                        onChange={(e) =>
-                          setEditedData((prev) => ({
-                            ...prev!,
-                            amount: e.target.value,
-                          }))
-                        }
-                        className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#2E86DE] focus:border-transparent"
-                        placeholder="0.00"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Date
-                      </label>
-                      <input
-                        type="date"
-                        value={editedData.receipt_date || ""}
-                        onChange={(e) =>
-                          setEditedData((prev) => ({
-                            ...prev!,
-                            receipt_date: e.target.value,
-                          }))
-                        }
-                        className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#2E86DE] focus:border-transparent"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Category
-                      </label>
-                      <select
-                        value={editedData.category || "Other"}
-                        onChange={(e) =>
-                          setEditedData((prev) => ({
-                            ...prev!,
-                            category: e.target.value,
-                          }))
-                        }
-                        className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#2E86DE] focus:border-transparent"
-                      >
-                        <option value="Meals">Meals</option>
-                        <option value="Travel">Travel</option>
-                        <option value="Supplies">Supplies</option>
-                        <option value="Other">Other</option>
-                      </select>
-                    </div>
+                    <h2 className="text-lg font-semibold text-gray-900">
+                      Review & Edit Details
+                    </h2>
+                    {preparingReview && (
+                      <div className="flex items-center gap-2 text-[#2E86DE]">
+                        <div className="w-4 h-4 border-2 border-[#2E86DE] border-t-transparent rounded-full animate-spin"></div>
+                        <span className="text-sm font-medium">Loading...</span>
+                      </div>
+                    )}
                   </div>
 
-                  {error && (
-                    <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-2xl">
-                      <div className="flex items-center gap-2 text-red-600">
-                        <X size={20} />
-                        <span className="font-medium">{error}</span>
+                  {preparingReview ? (
+                    /* Loading State for Review Form */
+                    <div className="space-y-6">
+                      <div className="text-center py-8">
+                        <div className="w-16 h-16 bg-linear-to-br from-[#2E86DE]/20 to-[#2574C7]/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                          <div className="relative">
+                            <FileText size={28} className="text-[#2E86DE]" />
+                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#2E86DE] rounded-full animate-pulse"></div>
+                          </div>
+                        </div>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                          Preparing Review Form
+                        </h3>
+                        <p className="text-gray-600 mb-4">
+                          Extracting and organizing your receipt data...
+                        </p>
+                        <div className="flex items-center justify-center gap-2">
+                          <div className="w-2 h-2 bg-[#2E86DE] rounded-full animate-bounce"></div>
+                          <div className="w-2 h-2 bg-[#2574C7] rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                          <div className="w-2 h-2 bg-[#1E5AA8] rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                        </div>
+                      </div>
+                      
+                      {/* Skeleton form fields */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {[1, 2, 3, 4].map((i) => (
+                          <div key={i} className="space-y-2">
+                            <div className="h-4 bg-gray-200 rounded animate-pulse w-24"></div>
+                            <div className="h-12 bg-gray-200 rounded-2xl animate-pulse"></div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    /* Actual Form */
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Merchant Name
+                          </label>
+                          <input
+                            type="text"
+                            value={editedData.merchant_name || ""}
+                            onChange={(e) =>
+                              setEditedData((prev) => ({
+                                ...prev!,
+                                merchant_name: e.target.value,
+                              }))
+                            }
+                            className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#2E86DE] focus:border-transparent"
+                            placeholder="Enter merchant name"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Amount ($)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={String(editedData.amount || "")}
+                            onChange={(e) =>
+                              setEditedData((prev) => ({
+                                ...prev!,
+                                amount: e.target.value,
+                              }))
+                            }
+                            className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#2E86DE] focus:border-transparent"
+                            placeholder="0.00"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Date
+                          </label>
+                          <input
+                            type="date"
+                            value={editedData.receipt_date || ""}
+                            onChange={(e) =>
+                              setEditedData((prev) => ({
+                                ...prev!,
+                                receipt_date: e.target.value,
+                              }))
+                            }
+                            className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#2E86DE] focus:border-transparent"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Category
+                          </label>
+                          <select
+                            value={editedData.category || "Other"}
+                            onChange={(e) =>
+                              setEditedData((prev) => ({
+                                ...prev!,
+                                category: e.target.value,
+                              }))
+                            }
+                            className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#2E86DE] focus:border-transparent"
+                          >
+                            <option value="Meals">Meals</option>
+                            <option value="Travel">Travel</option>
+                            <option value="Supplies">Supplies</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {error && (
+                        <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-2xl">
+                          <div className="flex items-center gap-2 text-red-600">
+                            <X size={20} />
+                            <span className="font-medium">{error}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex flex-col sm:flex-row gap-4">
+                        <button
+                          onClick={handleSaveReceipt}
+                          disabled={
+                            isSaveLoading ||
+                            !editedData.merchant_name ||
+                            !editedData.amount
+                          }
+                          className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-[#2E86DE] hover:bg-[#2574C7] text-white font-medium rounded-2xl transition-colors disabled:opacity-50"
+                        >
+                          <Check size={18} />
+                          {isSaveLoading ? "Saving..." : "Save Receipt"}
+                        </button>
+
+                        <button
+                          onClick={resetUpload}
+                          className="px-6 py-3 border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium rounded-2xl transition-colors"
+                        >
+                          Cancel
+                        </button>
                       </div>
                     </div>
                   )}
-
-                  <div className="mt-8 flex gap-4">
-                    <button
-                      onClick={handleSaveReceipt}
-                      disabled={
-                        isSaveLoading ||
-                        !editedData.merchant_name ||
-                        !editedData.amount
-                      }
-                      className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-[#2E86DE] hover:bg-[#2574C7] text-white font-medium rounded-2xl transition-colors disabled:opacity-50"
-                    >
-                      <Check size={18} />
-                      {isSaveLoading ? "Saving..." : "Save Receipt"}
-                    </button>
-
-                    <button
-                      onClick={resetUpload}
-                      className="px-6 py-3 border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium rounded-2xl transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
                 </div>
               )}
             </div>
