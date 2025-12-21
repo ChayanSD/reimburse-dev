@@ -1,4 +1,4 @@
-import puppeteer from 'puppeteer';
+import puppeteer from "puppeteer";
 import { generateHTML, ExpenseReportData } from "./htmlTemplates";
 
 export interface GeneratePDFOptions {
@@ -16,7 +16,10 @@ export interface PDFResult {
 }
 
 // Enhanced PDF generation using Puppeteer for HTML to PDF conversion
-export async function generatePDF(data: ExpenseReportData , options?: { userId?: string }): Promise<PDFResult> {
+export async function generatePDF(
+  data: ExpenseReportData,
+  options?: { userId?: string }
+): Promise<PDFResult> {
   let browser;
   try {
     // Generate HTML content
@@ -28,24 +31,39 @@ export async function generatePDF(data: ExpenseReportData , options?: { userId?:
       .toLowerCase()
       .replace(/[^a-z0-9]/g, "");
     const periodStart = new Date(data.reportMeta.period_start);
-    const periodStr = `${periodStart.getFullYear()}-${String(periodStart.getMonth() + 1).padStart(2, "0")}`;
+    const periodStr = `${periodStart.getFullYear()}-${String(
+      periodStart.getMonth() + 1
+    ).padStart(2, "0")}`;
     const filename = `reimburseme_${userSlug}_${periodStr}.pdf`;
 
-    // Launch Puppeteer with lightweight options
+    // Platform-specific launch arguments for cross-platform compatibility
+    const baseArgs = [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-accelerated-2d-canvas",
+      "--no-first-run",
+      "--no-zygote",
+      "--disable-gpu",
+      "--disable-web-security",
+      "--disable-features=VizDisplayCompositor",
+      "--disable-background-timer-throttling",
+      "--disable-backgrounding-occluded-windows",
+      "--disable-renderer-backgrounding",
+    ];
+
+    // Add platform-specific args
+    const platformArgs =
+      process.platform === "win32"
+        ? [] // Avoid --single-process on Windows as it can cause issues
+        : ["--single-process"];
+
+    const launchArgs = [...baseArgs, ...platformArgs];
+
+    // Launch Puppeteer with platform-aware options
     browser = await puppeteer.launch({
       headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process', // <- this one doesn't work in Windows
-        '--disable-gpu',
-        '--disable-web-security',
-        '--disable-features=VizDisplayCompositor'
-      ]
+      args: launchArgs,
     });
 
     const page = await browser.newPage();
@@ -53,27 +71,28 @@ export async function generatePDF(data: ExpenseReportData , options?: { userId?:
     // Set viewport for better PDF rendering
     await page.setViewport({ width: 1200, height: 800 });
 
-    // Set HTML content
+    // Set HTML content with increased timeout for reliability
     await page.setContent(htmlContent, {
-      waitUntil: 'load',
-      timeout: 15000
+      waitUntil: "load",
+      timeout: 30000,
     });
 
     // Emulate print media for better PDF rendering
-    await page.emulateMediaType('print');
+    await page.emulateMediaType("print");
 
-    // Generate PDF with print-friendly options
+    // Generate PDF with print-friendly options and timeout
     const pdfUint8Array = await page.pdf({
-      format: 'A4',
+      format: "A4",
       printBackground: true,
       margin: {
-        top: '0.5in',
-        right: '0.5in',
-        bottom: '0.5in',
-        left: '0.5in'
+        top: "0.5in",
+        right: "0.5in",
+        bottom: "0.5in",
+        left: "0.5in",
       },
       preferCSSPageSize: false,
       displayHeaderFooter: false,
+      timeout: 30000,
     });
 
     // Convert to Buffer
@@ -84,11 +103,13 @@ export async function generatePDF(data: ExpenseReportData , options?: { userId?:
       1,
       Math.ceil((data.line_items?.length || 0) / 15) +
         1 +
-        (data.appendix?.include_receipt_gallery ? 1 : 0),
+        (data.appendix?.include_receipt_gallery ? 1 : 0)
     );
 
     // Create data URL for the PDF
-    const pdfDataUrl = `data:application/pdf;base64,${pdfBuffer.toString('base64')}`;
+    const pdfDataUrl = `data:application/pdf;base64,${pdfBuffer.toString(
+      "base64"
+    )}`;
 
     return {
       pdfBuffer,
@@ -98,14 +119,16 @@ export async function generatePDF(data: ExpenseReportData , options?: { userId?:
       filename,
       html_content: htmlContent,
     };
-
   } catch (error) {
-    console.error('PDF generation failed:', error);
-    throw new Error(`Failed to generate PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error("PDF generation failed:", error);
+    throw new Error(
+      `Failed to generate PDF: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`
+    );
   } finally {
     if (browser) {
       await browser.close();
     }
   }
 }
-
