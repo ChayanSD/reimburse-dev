@@ -1,6 +1,6 @@
-import { SessionUser } from './session';
-import { signInWithPopup , onAuthStateChanged} from 'firebase/auth';
-import { auth, googleProvider } from './firebase';
+import { SessionUser } from "./session";
+import { signInWithPopup, onAuthStateChanged } from "firebase/auth";
+import { auth, googleProvider } from "./firebase";
 
 export interface AuthState {
   user: SessionUser | null;
@@ -19,17 +19,17 @@ export class AuthClient {
   private listeners: ((state: AuthState) => void)[] = [];
 
   private constructor() {
-  onAuthStateChanged(auth, async (user) => {
-    if (user) {
-      await this.fetchUser();
-    } else {
-      this.authState.user = null;
-      this.authState.isAuthenticated = false;
-      this.authState.isLoading = false;
-      this.notify();
-    }
-  });
-}
+    onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        await this.fetchUser();
+      } else {
+        this.authState.user = null;
+        this.authState.isAuthenticated = false;
+        this.authState.isLoading = false;
+        this.notify();
+      }
+    });
+  }
 
   static getInstance(): AuthClient {
     if (!AuthClient.instance) {
@@ -42,7 +42,7 @@ export class AuthClient {
   subscribe(listener: (state: AuthState) => void): () => void {
     this.listeners.push(listener);
     return () => {
-      this.listeners = this.listeners.filter(l => l !== listener);
+      this.listeners = this.listeners.filter((l) => l !== listener);
     };
   }
 
@@ -53,7 +53,7 @@ export class AuthClient {
 
   // Notify all listeners
   private notify() {
-    this.listeners.forEach(listener => listener(this.getState()));
+    this.listeners.forEach((listener) => listener(this.getState()));
   }
 
   // Fetch current user from API
@@ -62,8 +62,8 @@ export class AuthClient {
       this.authState.isLoading = true;
       this.notify();
 
-      const response = await fetch('/api/auth/me', {
-        credentials: 'include'
+      const response = await fetch("/api/auth/me", {
+        credentials: "include",
       });
       if (response.ok) {
         const data = await response.json();
@@ -74,7 +74,7 @@ export class AuthClient {
         this.authState.isAuthenticated = false;
       }
     } catch (error) {
-      console.error('Failed to fetch user:', error);
+      console.error("Failed to fetch user:", error);
       this.authState.user = null;
       this.authState.isAuthenticated = false;
     } finally {
@@ -86,13 +86,16 @@ export class AuthClient {
   }
 
   // Login
-  async login(email: string, password: string): Promise<{ success: boolean; error?: string }> {
+  async login(
+    email: string,
+    password: string
+  ): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        credentials: 'include',
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        credentials: "include",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({ email, password }),
       });
@@ -106,19 +109,29 @@ export class AuthClient {
         return { success: false, error: data.error };
       }
     } catch (error) {
-      console.error('Login failed:', error);
-      return { success: false, error: 'Network error' };
+      console.error("Login failed:", error);
+      return { success: false, error: "Network error" };
     }
   }
 
   // Signup
-  async signup(email: string, password: string, firstName: string, lastName: string): Promise<{ success: boolean; error?: string }> {
+  async signup(
+    email: string,
+    password: string,
+    firstName: string,
+    lastName: string
+  ): Promise<{
+    success: boolean;
+    error?: string;
+    requiresVerification?: boolean;
+    user?: any;
+  }> {
     try {
-      const response = await fetch('/api/auth/signup', {
-        method: 'POST',
-        credentials: 'include',
+      const response = await fetch("/api/auth/signup", {
+        method: "POST",
+        credentials: "include",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({ email, password, firstName, lastName }),
       });
@@ -126,27 +139,35 @@ export class AuthClient {
       const data = await response.json();
 
       if (response.ok) {
-        return { success: true };
+        return {
+          success: true,
+          requiresVerification: data.requiresVerification,
+          user: data.user,
+        };
       } else {
         return { success: false, error: data.error };
       }
     } catch (error) {
-      console.error('Signup failed:', error);
-      return { success: false, error: 'Network error' };
+      console.error("Signup failed:", error);
+      return { success: false, error: "Network error" };
     }
   }
 
   // Sign in with Google
-  async signInWithGoogle(): Promise<{ success: boolean; error?: string }> {
+  async signInWithGoogle(): Promise<{
+    success: boolean;
+    error?: string;
+    user?: any;
+  }> {
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const idToken = await result.user.getIdToken();
 
-      const response = await fetch('/api/auth/google', {
-        method: 'POST',
-        credentials: 'include',
+      const response = await fetch("/api/auth/google", {
+        method: "POST",
+        credentials: "include",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({ idToken }),
       });
@@ -155,28 +176,28 @@ export class AuthClient {
 
       if (response.ok) {
         await this.fetchUser(); // Refresh user state
-        return { success: true };
+        return { success: true, user: data.user };
       } else {
         return { success: false, error: data.error };
       }
     } catch (error) {
-      console.error('Google sign in failed:', error);
-      return { success: false, error: 'Google sign in failed' };
+      console.error("Google sign in failed:", error);
+      return { success: false, error: "Google sign in failed" };
     }
   }
 
   // Logout
   async logout(): Promise<void> {
     try {
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        credentials: 'include'
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
       });
       this.authState.user = null;
       this.authState.isAuthenticated = false;
       this.notify();
     } catch (error) {
-      console.error('Logout failed:', error);
+      console.error("Logout failed:", error);
     }
   }
 }

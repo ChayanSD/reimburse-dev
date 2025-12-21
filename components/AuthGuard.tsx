@@ -7,13 +7,15 @@ import { useAuth } from "@/lib/hooks/useAuth";
 interface AuthGuardProps {
   children: React.ReactNode;
   requireAdmin?: boolean;
+  requireVerified?: boolean;
   redirectTo?: string;
 }
 
-export default function AuthGuard({ 
-  children, 
-  requireAdmin = false, 
-  redirectTo = "/account/signin" 
+export default function AuthGuard({
+  children,
+  requireAdmin = false,
+  requireVerified = false,
+  redirectTo = "/account/signin",
 }: AuthGuardProps) {
   const router = useRouter();
   const { user, isLoading, isAuthenticated } = useAuth();
@@ -28,12 +30,26 @@ export default function AuthGuard({
       return;
     }
 
+    // Redirect to email verification if verification is required but user is not verified
+    if (requireVerified && !user?.isVerified) {
+      router.push("/account/verify-email");
+      return;
+    }
+
     // Redirect to access denied if admin access is required but user is not admin
-    if (requireAdmin && user?.role !== 'ADMIN') {
+    if (requireAdmin && user?.role !== "ADMIN") {
       router.push("/dashboard");
       return;
     }
-  }, [user, isLoading, isAuthenticated, requireAdmin, redirectTo, router]);
+  }, [
+    user,
+    isLoading,
+    isAuthenticated,
+    requireAdmin,
+    requireVerified,
+    redirectTo,
+    router,
+  ]);
 
   // Show loading while checking authentication
   if (isLoading) {
@@ -52,8 +68,13 @@ export default function AuthGuard({
     return null;
   }
 
+  // Don't render children if verification is required but user is not verified
+  if (requireVerified && !user?.isVerified) {
+    return null;
+  }
+
   // Don't render children if admin access is required but user is not admin
-  if (requireAdmin && user?.role !== 'ADMIN') {
+  if (requireAdmin && user?.role !== "ADMIN") {
     return null;
   }
 

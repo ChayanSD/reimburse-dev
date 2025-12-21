@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { loginSchema } from "@/lib/auth";
 import { createSession, setSessionCookie } from "@/lib/session";
 
-export async function POST(request: NextRequest) : Promise<NextResponse> {
+export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const body = await request.json();
 
@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) : Promise<NextResponse> {
         firstName: true,
         lastName: true,
         role: true,
+        isVerified: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -50,12 +51,24 @@ export async function POST(request: NextRequest) : Promise<NextResponse> {
       );
     }
 
+    // Check if email is verified
+    if (!user.isVerified) {
+      return NextResponse.json(
+        {
+          error:
+            "Please verify your email address before signing in. Check your email for the verification link.",
+        },
+        { status: 403 }
+      );
+    }
+
     // Create session
     const sessionUser = {
       id: user.id,
       name: `${user.firstName} ${user.lastName}`,
       email: user.email,
       role: user.role,
+      isVerified: user.isVerified,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };

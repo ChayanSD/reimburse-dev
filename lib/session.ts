@@ -6,14 +6,14 @@ export interface SessionUser {
   id: number;
   name: string;
   email: string;
-  role: 'ADMIN' | 'USER';
+  role: "ADMIN" | "USER";
+  isVerified: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
 
 const SESSION_TTL = 60 * 60 * 24 * 7;
 const COOKIE_NAME = "session_id";
-
 
 export async function createSession(user: SessionUser): Promise<string> {
   const sessionId = nanoid();
@@ -23,6 +23,7 @@ export async function createSession(user: SessionUser): Promise<string> {
     name: user.name,
     email: user.email,
     role: user.role,
+    isVerified: user.isVerified,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
@@ -36,9 +37,8 @@ export async function createSession(user: SessionUser): Promise<string> {
   return sessionId;
 }
 
-
 export async function getSession(): Promise<SessionUser | null> {
-  const cookieStore =await cookies();
+  const cookieStore = await cookies();
   const sessionId = cookieStore.get(COOKIE_NAME)?.value;
 
   if (!sessionId) {
@@ -58,7 +58,7 @@ export async function getSession(): Promise<SessionUser | null> {
   await redis.expire(sessionKey, SESSION_TTL);
 
   let parsedSession: SessionUser;
-  if (typeof sessionData === 'string') {
+  if (typeof sessionData === "string") {
     parsedSession = JSON.parse(sessionData);
   } else {
     parsedSession = sessionData as SessionUser;
@@ -70,7 +70,6 @@ export async function getSession(): Promise<SessionUser | null> {
     updatedAt: new Date(parsedSession.updatedAt),
   };
 }
-
 
 export async function deleteSession(): Promise<void> {
   const cookieStore = await cookies();
