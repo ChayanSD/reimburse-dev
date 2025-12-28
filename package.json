@@ -33,8 +33,6 @@
     "next": "16.0.7",
     "nodemailer": "^7.0.11",
     "openai": "^6.10.0",
-    "puppeteer-core": "^24.33.0",
-    "@sparticuz/chromium": "^131.0.0",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-hot-toast": "^2.6.0",
