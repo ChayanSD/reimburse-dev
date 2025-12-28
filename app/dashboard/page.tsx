@@ -129,9 +129,53 @@ const deleteReceipt = async (receiptId: string): Promise<void> => {
   await axios.delete(`/api/receipts/${receiptId}`);
 };
 
-const generateReport = async (reportData: ReportData): Promise<{ download_url: string; filename: string }> => {
-  const { data } = await axios.post<{ download_url: string; filename: string }>("/api/reports", reportData);
+const generateReport = async (reportData: ReportData): Promise<{ 
+  download_url?: string; 
+  filename?: string;
+  status?: string;
+  report_id?: number;
+  message?: string;
+}> => {
+  const { data } = await axios.post<{ 
+    download_url?: string; 
+    filename?: string;
+    status?: string;
+    report_id?: number;
+    message?: string;
+  }>("/api/reports", reportData);
   return data;
+};
+
+// Simple, reliable PDF generation using browser print
+const generateSimplePDF = async (reportData: ReportData): Promise<{ success: boolean; filename?: string; error?: string }> => {
+  try {
+    // Get PDF data from server (fast - no PDF generation)
+    const { data: pdfDataResponse } = await axios.post<{
+      success: boolean;
+      pdfData: any;
+      filename: string;
+    }>("/api/reports/pdf-data", reportData);
+
+    if (!pdfDataResponse.success || !pdfDataResponse.pdfData) {
+      throw new Error("Failed to get PDF data");
+    }
+
+    // Use simple browser print-to-PDF (100% reliable)
+    const { generateSimplePDF: generatePDF } = await import("@/utils/simplePdfGenerator");
+    
+    // Generate PDF using browser print
+    const result = await generatePDF(pdfDataResponse.pdfData, {
+      filename: pdfDataResponse.filename,
+    });
+
+    return result;
+  } catch (error) {
+    console.error("PDF generation error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
 };
 
 // Helper function to get user's display name
@@ -308,24 +352,124 @@ export default function DashboardPage() {
     },
   });
 
+  // Store current report data for error fallback
+  const currentReportDataRef = useRef<ReportData | null>(null);
+
   const reportMutation = useMutation({
-    mutationFn: generateReport,
-    onSuccess: (data) => {
-      const link = document.createElement("a");
-      link.href = data.download_url;
-      link.download = data.filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      addToast({
-        type: 'success',
-        title: 'Report Generated',
-        message: 'Your expense report has been downloaded successfully.',
-        duration: 3000,
-      });
+    mutationFn: async (reportData: ReportData) => {
+      currentReportDataRef.current = reportData; // Store for error fallback
+      return generateReport(reportData);
     },
-    onError: (error: unknown) => {
+    onSuccess: async (data) => {
+      // Check if PDF is being processed asynchronously
+      if (data.status === "processing" && data.report_id) {
+        addToast({
+          type: 'info',
+          title: 'PDF Generation Started',
+          message: 'Your PDF is being generated. This may take a few seconds...',
+          duration: 3000,
+        });
+
+        // Poll for PDF status (60 seconds max to match background job timeout)
+        let pollCount = 0;
+        const maxPolls = 60; // 60 seconds max (matches background job timeout)
+        const pollInterval = setInterval(async () => {
+          pollCount++;
+          
+          if (pollCount > maxPolls) {
+            clearInterval(pollInterval);
+            
+            // Try client-side PDF generation as fallback
+            const reportData = currentReportDataRef.current;
+            if (reportData && reportData.format === "pdf") {
+              addToast({
+                type: 'info',
+                title: 'Server PDF Generation Timeout',
+                message: 'Trying client-side PDF generation as fallback...',
+                duration: 3000,
+              });
+
+              try {
+                const clientResult = await generateSimplePDF(reportData);
+                if (clientResult.success) {
+                  addToast({
+                    type: 'success',
+                    title: 'PDF Generated (Client-side)',
+                    message: `Your PDF "${clientResult.filename}" has been downloaded successfully.`,
+                    duration: 3000,
+                  });
+                  currentReportDataRef.current = null;
+                  return;
+                } else {
+                  throw new Error(clientResult.error || "Client-side generation failed");
+                }
+              } catch (clientError) {
+                console.error("Client-side PDF generation failed:", clientError);
+                addToast({
+                  type: 'error',
+                  title: 'PDF Generation Failed',
+                  message: 'Both server and client-side PDF generation failed. Please try again.',
+                  duration: 6000,
+                });
+              }
+            } else {
+              addToast({
+                type: 'error',
+                title: 'PDF Generation Timeout',
+                message: 'PDF generation is taking longer than expected. Please try again.',
+                duration: 5000,
+              });
+            }
+            return;
+          }
+
+          try {
+            const response = await axios.get(`/api/reports/status/${data.report_id}`);
+            const { status, report } = response.data;
+
+            if (status === "completed" && report?.pdfUrl) {
+              clearInterval(pollInterval);
+              
+              // Download the PDF
+              const link = document.createElement("a");
+              link.href = report.pdfUrl;
+              link.download = `report-${data.report_id}.pdf`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              
+              addToast({
+                type: 'success',
+                title: 'Report Generated',
+                message: 'Your expense report has been downloaded successfully.',
+                duration: 3000,
+              });
+            }
+          } catch (error) {
+            console.error("Error polling PDF status:", error);
+            if (pollCount >= maxPolls) {
+              clearInterval(pollInterval);
+            }
+          }
+        }, 1000); // Poll every 1 second
+      } else if (data.download_url && data.filename) {
+        // CSV or immediate PDF download
+        const link = document.createElement("a");
+        link.href = data.download_url;
+        link.download = data.filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        addToast({
+          type: 'success',
+          title: 'Report Generated',
+          message: 'Your expense report has been downloaded successfully.',
+          duration: 3000,
+        });
+      }
+    },
+    onError: async (error: unknown) => {
       console.error("Error generating report:", error);
       
       // Type guard for axios error
@@ -348,16 +492,58 @@ export default function DashboardPage() {
           router.push('/plans');
         }, 2000);
         
+        currentReportDataRef.current = null;
         return;
       }
       
-      // Handle other errors
-      addToast({
-        type: 'error',
-        title: 'Report Generation Failed',
-        message: axiosError.response?.data?.error || 'Failed to generate report. Please try again.',
-        duration: 5000,
-      });
+      // Handle other errors - try client-side PDF generation as fallback for PDFs
+      const reportData = currentReportDataRef.current;
+      const format = reportData?.format;
+      
+      if (format === "pdf" && reportData) {
+        addToast({
+          type: 'info',
+          title: 'Server PDF Generation Failed',
+          message: 'Trying client-side PDF generation as fallback...',
+          duration: 2000,
+        });
+
+        // Try client-side PDF generation as fallback
+        try {
+          const clientResult = await generateSimplePDF(reportData);
+          if (clientResult.success) {
+            addToast({
+              type: 'success',
+              title: 'PDF Generated (Client-side)',
+              message: `Your PDF "${clientResult.filename}" has been downloaded successfully.`,
+              duration: 3000,
+            });
+            currentReportDataRef.current = null;
+            return; // Success - exit early
+          } else {
+            throw new Error(clientResult.error || "Client-side generation failed");
+          }
+        } catch (clientError) {
+          console.error("Client-side PDF generation also failed:", clientError);
+          addToast({
+            type: 'error',
+            title: 'PDF Generation Failed',
+            message: 'Both server and client-side PDF generation failed. Please try again or contact support.',
+            duration: 6000,
+          });
+        }
+      } else {
+        // CSV or other format - show error
+        addToast({
+          type: 'error',
+          title: 'Report Generation Failed',
+          message: axiosError.response?.data?.error || 'Failed to generate report. Please try again.',
+          duration: 5000,
+        });
+      }
+      
+      // Clear stored report data
+      currentReportDataRef.current = null;
     },
   });
 
@@ -461,6 +647,94 @@ export default function DashboardPage() {
   const handleSelectAll = useCallback((checked: boolean) => {
     setSelectedReceipts(checked ? receipts.map(r => r.id) : []);
   }, [receipts]);
+
+  // Client-side PDF generation handler (instant, no server needed)
+  const handleGenerateClientPDF = async () => {
+    const receiptsToExport = selectedReceipts.length > 0 ? receipts.filter(r => selectedReceipts.includes(r.id)) : receipts;
+    
+    if (receiptsToExport.length === 0) {
+      addToast({
+        type: 'error',
+        title: 'No Receipts',
+        message: 'Please select receipts to generate a PDF report.',
+        duration: 3000,
+      });
+      return;
+    }
+
+    addToast({
+      type: 'info',
+      title: 'Generating PDF...',
+      message: 'Generating PDF in your browser (this may take a few seconds)...',
+      duration: 3000,
+    });
+
+    try {
+      // Calculate date range
+      const now = new Date();
+      let startDate: Date;
+      let endDate: Date = now;
+
+      switch (filters.dateRange) {
+        case "current_month":
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+          break;
+        case "last_30":
+          startDate = new Date(now);
+          startDate.setDate(now.getDate() - 30);
+          break;
+        case "last_90":
+          startDate = new Date(now);
+          startDate.setDate(now.getDate() - 90);
+          break;
+        case "custom":
+          startDate = filters.customStartDate ? new Date(filters.customStartDate) : new Date(0);
+          endDate = filters.customEndDate ? new Date(filters.customEndDate) : now;
+          break;
+        default:
+          if (receiptsToExport.length > 0) {
+            const dates = receiptsToExport
+              .map(r => r.receipt_date ? new Date(r.receipt_date) : null)
+              .filter((d): d is Date => d !== null && !isNaN(d.getTime()));
+            startDate = dates.length > 0 ? new Date(Math.min(...dates.map(d => d.getTime()))) : new Date(now.getFullYear(), now.getMonth() - 3, 1);
+          } else {
+            startDate = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+          }
+          break;
+      }
+
+      const formatDate = (date: Date) => date.toISOString().split('T')[0];
+
+      const reportData: ReportData = {
+        receipt_ids: receiptsToExport.map((r) => Number(r.id)),
+        period_start: formatDate(startDate),
+        period_end: formatDate(endDate),
+        format: "pdf",
+        company_setting_id: selectedCompanySetting,
+      };
+
+      const clientResult = await generateSimplePDF(reportData);
+      
+      if (clientResult.success) {
+        addToast({
+          type: 'success',
+          title: 'PDF Generated',
+          message: `Your PDF "${clientResult.filename}" has been downloaded successfully.`,
+          duration: 3000,
+        });
+      } else {
+        throw new Error(clientResult.error || "Client-side generation failed");
+      }
+    } catch (error) {
+      console.error("Client-side PDF generation error:", error);
+      addToast({
+        type: 'error',
+        title: 'PDF Generation Failed',
+        message: error instanceof Error ? error.message : 'Failed to generate PDF. Please try again.',
+        duration: 5000,
+      });
+    }
+  };
 
   const handleGenerateReport = async (format: "csv" | "pdf") => {
     const receiptsToExport = selectedReceipts.length > 0 ? receipts.filter(r => selectedReceipts.includes(r.id)) : receipts;
@@ -1026,7 +1300,18 @@ export default function DashboardPage() {
                 className="flex items-center justify-center gap-2 px-4 sm:px-6 py-3 bg-[#2E86DE] hover:bg-[#2574C7] text-white font-medium rounded-xl transition-colors disabled:opacity-50 text-sm sm:text-base"
               >
                 <Download size={18} />
-                PDF Report
+                PDF Report (Server)
+              </button>
+              
+              {/* Simple browser print-to-PDF - 100% reliable */}
+              <button
+                onClick={handleGenerateClientPDF}
+                disabled={reportMutation.isPending || receipts.length === 0}
+                className="flex items-center justify-center gap-2 px-4 sm:px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-xl transition-colors disabled:opacity-50 text-sm sm:text-base"
+                title="Open print dialog to save as PDF (works everywhere, 100% reliable)"
+              >
+                <Download size={18} />
+                PDF Report (Print)
               </button>
             </div>
 

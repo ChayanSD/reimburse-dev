@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { reportCreateSchema } from "@/validation/report.validation";
 import { checkSubscriptionLimit, incrementUsage, getUserSubscriptionInfo, getSubscriptionLimits } from "@/lib/subscriptionGuard";
-import { generatePDF, PDFResult } from "@/utils/pdfGenerator";
 import { badRequest, unauthorized, notFound, subscriptionLimitReached, handleDatabaseError, handleValidationError } from "@/lib/error";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { Client } from "@upstash/qstash";
 import type { AuthUser, CompanySettings, Receipt } from "../../generated/prisma/client";
 
 // Vercel serverless function timeout configuration
 // Hobby plan: 10s limit (hard limit)
-// PDF generation optimized for 10s execution
+// PDF generation is queued in background to avoid timeout
 export const maxDuration = 10;
+
+const qstashClient = new Client({
+  token: process.env.QSTASH_TOKEN!,
+});
 
 
 
@@ -283,7 +287,7 @@ export async function POST(request : NextRequest) : Promise<NextResponse>{
       const blob = Buffer.from(reportData).toString("base64");
       reportUrl = `data:${mimeType};base64,${blob}`;
     } else {
-      // Use new professional PDF export with company settings and proper user name
+      // PDF generation - queue in background to avoid Vercel 10s timeout
       const pdfData = convertToPDFFormat(
         receipts,
         period_start,
@@ -293,14 +297,62 @@ export async function POST(request : NextRequest) : Promise<NextResponse>{
         period_end,
         title
       );
-      const pdfResult = await generatePDF(pdfData, { userId: userId.toString() });
 
-      reportData = pdfResult;
-      mimeType = "application/pdf";
-      filename = pdfResult.filename;
-      reportUrl = pdfResult.pdf_url;
+      // Save report record first (with pending status)
+      const report = await prisma.report.create({
+        data: {
+          userId,
+          periodStart: new Date(period_start),
+          periodEnd: new Date(period_end),
+          title,
+          totalAmount,
+          csvUrl: null,
+          pdfUrl: null, // Will be set when PDF is generated
+          receiptCount: receipts.length
+        }
+      });
+
+      // Queue PDF generation in background using QStash
+      const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/reports/process`;
+      
+      console.log("[PDF Queue] Queuing PDF generation job...");
+      console.log("[PDF Queue] Webhook URL:", webhookUrl);
+      console.log("[PDF Queue] Report ID:", report.id);
+      
+      try {
+        const messageId = await qstashClient.publishJSON({
+          url: webhookUrl,
+          body: {
+            reportId: report.id,
+            pdfData: pdfData,
+            userId: userId,
+          },
+          retries: 2,
+          timeout: "60s",
+        });
+        
+        console.log("[PDF Queue] Job queued successfully, message ID:", messageId);
+      } catch (queueError) {
+        console.error("[PDF Queue] Failed to queue job:", queueError);
+        throw new Error(`Failed to queue PDF generation: ${queueError instanceof Error ? queueError.message : 'Unknown error'}`);
+      }
+
+      // Increment usage counter
+      await incrementUsage(userId, 'report_exports');
+
+      // Return immediately with report ID - frontend will poll for status
+      return NextResponse.json({
+        success: true,
+        report: report,
+        report_id: report.id,
+        status: "processing",
+        message: "PDF generation queued. Please check back in a few seconds.",
+        total_amount: totalAmount,
+        receipt_count: receipts.length,
+      });
     }
 
+    // CSV generation (synchronous - fast enough)
     // Save report record to database
     const report = await prisma.report.create({
       data: {
@@ -310,26 +362,13 @@ export async function POST(request : NextRequest) : Promise<NextResponse>{
         title,
         totalAmount,
         csvUrl: format === "csv" ? reportUrl : null,
-        pdfUrl: format === "pdf" ? reportUrl : null,
+        pdfUrl: null,
         receiptCount: receipts.length
       }
     });
 
     // Increment usage counter
     await incrementUsage(userId, 'report_exports');
-
-    if (format === "pdf") {
-      return NextResponse.json({
-        success: true,
-        report: report,
-        download_url: reportUrl,
-        filename,
-        total_amount: totalAmount,
-        receipt_count: receipts.length,
-        pages: (reportData as PDFResult).pages,
-        template_used: (reportData as PDFResult).template_used,
-      });
-    }
 
     return NextResponse.json({
       success: true,

@@ -22,17 +22,24 @@ async function retryRequest<T>(
   maxRetries: number = 3,
   delayMs: number = 1000
 ): Promise<T> {
+  // If maxRetries is 0, execute once without retries (fail fast for Vercel)
+  if (maxRetries === 0) {
+    return await fn();
+  }
+  
   let lastError: Error;
   
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) { // +1 because first attempt is not a retry
     try {
       return await fn();
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       
-      if (attempt < maxRetries) {
+      if (attempt <= maxRetries) {
         const delay = delayMs * attempt; // Exponential backoff
-        console.warn(`PDF generation attempt ${attempt} failed, retrying in ${delay}ms...`, lastError.message);
+        if (process.env.NODE_ENV !== "production") {
+          console.warn(`PDF generation attempt ${attempt} failed, retrying in ${delay}ms...`, lastError.message);
+        }
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
@@ -71,6 +78,9 @@ export async function generatePDF(
   options?: { userId?: string }
 ): Promise<PDFResult> {
   try {
+    // Detect Vercel environment for optimization
+    const isVercel = !!process.env.VERCEL || !!process.env.VERCEL_ENV;
+    
     // Step 1: Validate API key exists (with helpful error message)
     const apiKey = "sk_b4c0fc737016d51781d70fcdbac6aa6447324e59";
     if (!apiKey || apiKey.trim().length === 0) {
@@ -99,17 +109,33 @@ export async function generatePDF(
     ).padStart(2, "0")}`;
     const filename = `reimburseme_${userSlug}_${periodStr}.pdf`;
 
-    // Step 5: Generate PDF using PDFShift API with retry logic and timeout
+    // Step 5: Generate PDF using PDFShift API with optimized timeout for Vercel
+    // Vercel Hobby: 10s HARD limit - function is KILLED if exceeded
+    // Strategy: 4.5s timeout, NO retries, fail fast
+    // This leaves 5.5s for: HTML gen (~0.5s) + network (~0.5s) + validation (~0.5s) + response (~0.5s) = ~2s buffer
+    const timeoutMs = isVercel ? 4500 : 8000; // 4.5s on Vercel (5.5s buffer), 8s locally
+    const maxRetries = isVercel ? 0 : 3; // NO retries on Vercel (fail fast), 3 locally
+    const retryDelay = isVercel ? 0 : 1000; // No delay needed on Vercel (no retries)
+    
+    // Check HTML size on Vercel - fail early if too large (saves time)
+    if (isVercel && htmlContent.length > 500000) { // ~500KB HTML limit
+      throw new Error(
+        "HTML content too large for Vercel Hobby plan (10s limit). " +
+        "Please reduce the number of receipts or simplify the report template."
+      );
+    }
+    
     const pdfBuffer = await retryRequest(async () => {
-      // Create AbortController for timeout (8s max for Vercel Hobby)
+      // Create AbortController for timeout
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       try {
-        console.log("[PDF] Starting PDF generation request to PDFShift...");
-        console.log("[PDF] API key length:", apiKey?.length || 0);
-        console.log("[PDF] API key prefix:", apiKey?.substring(0, 10) || "none");
-        console.log("[PDF] HTML content length:", htmlContent.length);
+        // Minimal logging on Vercel to save time
+        if (!isVercel) {
+          console.log("[PDF] Starting PDF generation request to PDFShift...");
+          console.log("[PDF] HTML content length:", htmlContent.length);
+        }
         
         // PDFShift API: Use X-API-Key header (updated authentication method)
         let response: Response;
@@ -120,7 +146,6 @@ export async function generatePDF(
               "X-API-Key": apiKey,
               "Content-Type": "application/json",
               "Accept": "application/pdf",
-              "User-Agent": "ReimburseApp/1.0",
             },
             body: JSON.stringify({
               source: htmlContent,
@@ -131,7 +156,9 @@ export async function generatePDF(
           });
         } catch (fetchError) {
           clearTimeout(timeoutId);
-          console.error("[PDF] Fetch error:", fetchError);
+          if (!isVercel) {
+            console.error("[PDF] Fetch error:", fetchError);
+          }
           if (fetchError instanceof Error) {
             throw new Error(`Network error calling PDFShift API: ${fetchError.message}`);
           }
@@ -140,8 +167,9 @@ export async function generatePDF(
 
         clearTimeout(timeoutId);
 
-        console.log(`[PDF] PDFShift response status: ${response.status}`);
-        console.log(`[PDF] PDFShift response headers:`, Object.fromEntries(response.headers.entries()));
+        if (!isVercel) {
+          console.log(`[PDF] PDFShift response status: ${response.status}`);
+        }
 
         // Handle HTTP errors with specific messages
         if (!response.ok) {
@@ -150,23 +178,21 @@ export async function generatePDF(
           
           try {
             const contentType = response.headers.get("content-type");
-            console.log(`[PDF] Error response content-type:`, contentType);
             
             if (contentType?.includes("application/json")) {
               errorDetails = await response.json();
-              console.error(`[PDF] PDFShift JSON error response:`, errorDetails);
               errorMessage += errorDetails.message || errorDetails.error || errorDetails.detail || JSON.stringify(errorDetails);
             } else {
               const errorText = await response.text();
-              console.error(`[PDF] PDFShift text error response:`, errorText);
               errorMessage += errorText || response.statusText;
             }
           } catch (parseError) {
-            console.error(`[PDF] Error parsing error response:`, parseError);
             errorMessage += response.statusText || "Unknown error";
           }
 
-          console.error(`[PDF] PDFShift API error (final):`, errorMessage);
+          if (!isVercel) {
+            console.error(`[PDF] PDFShift API error:`, errorMessage);
+          }
 
           // Specific error handling for common issues
           if (response.status === 401 || response.status === 403) {
@@ -198,8 +224,6 @@ export async function generatePDF(
         const arrayBuffer = await response.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
         
-        console.log(`[PDF] Received PDF buffer, size: ${buffer.length} bytes`);
-        
         // Validate PDF was actually generated (check PDF magic number)
         if (buffer.length < 4) {
           throw new Error("PDFShift returned empty or invalid response");
@@ -207,33 +231,37 @@ export async function generatePDF(
         
         const pdfHeader = buffer.toString("ascii", 0, 4);
         if (pdfHeader !== "%PDF") {
-          console.error(`[PDF] Invalid PDF header: ${pdfHeader} (expected %PDF)`);
           throw new Error(
             `PDFShift returned invalid PDF data. Expected PDF file but got: ${pdfHeader.substring(0, 50)}...`
           );
         }
         
-        console.log("[PDF] PDF generation successful!");
+        if (!isVercel) {
+          console.log(`[PDF] PDF generation successful! Size: ${buffer.length} bytes`);
+        }
         return buffer;
       } catch (error) {
         clearTimeout(timeoutId);
         
         // Handle timeout specifically
         if (error instanceof Error && error.name === "AbortError") {
+          const timeoutSeconds = timeoutMs / 1000;
           throw new Error(
-            "PDF generation timed out after 8 seconds. " +
-            "This might be due to slow network or large HTML content. Please try again."
+            `PDF generation timed out after ${timeoutSeconds} seconds on Vercel. ` +
+            (isVercel 
+              ? "Vercel Hobby plan has a 10-second hard limit. Try: 1) Reducing receipt count, 2) Using a simpler template, or 3) Upgrading to Vercel Pro (60s limit)."
+              : "This might be due to slow network or large HTML content. Please try again.")
           );
         }
         
-        // Re-throw with more context
-        if (error instanceof Error) {
+        // Re-throw with more context (minimal logging on Vercel)
+        if (error instanceof Error && !isVercel) {
           console.error(`[PDF] PDF generation error:`, error.message);
         }
         
         throw error;
       }
-    }, 3, 1000); // 3 retries with 1s, 2s, 3s delays
+    }, maxRetries, retryDelay);
 
     // Step 6: Validate PDF was generated
     if (!pdfBuffer || pdfBuffer.length === 0) {
