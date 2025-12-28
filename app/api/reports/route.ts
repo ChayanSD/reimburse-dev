@@ -8,9 +8,9 @@ import { getSession } from "@/lib/session";
 import type { AuthUser, CompanySettings, Receipt } from "../../generated/prisma/client";
 
 // Vercel serverless function timeout configuration
-// Pro plan: up to 60s, Hobby: 10s limit
-// PDF generation can take up to 30s, so we set maxDuration to 30s
-export const maxDuration = 30;
+// Hobby plan: 10s limit (hard limit)
+// PDF generation optimized for 10s execution
+export const maxDuration = 10;
 
 
 

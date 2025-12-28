@@ -20,60 +20,8 @@ export interface PDFResult {
   html_content: string;
 }
 
-/**
- * Get Chromium executable path with fallback for local development
- * On Vercel: Uses @sparticuz/chromium
- * Local dev: Falls back to system Chrome/Chromium if available
- */
-async function getChromiumExecutablePath(): Promise<string | undefined> {
-  // Try to get serverless Chromium path (works on Vercel)
-  // Wrap in try-catch as executablePath() might throw in some environments
-  try {
-    const chromiumPath = await chromium.executablePath();
-    
-    if (chromiumPath && typeof chromiumPath === "string" && chromiumPath.length > 0) {
-      return chromiumPath;
-    }
-  } catch (error) {
-    // executablePath() might throw in some environments, continue to fallback
-    console.warn("Failed to get serverless Chromium path, trying fallback:", error);
-  }
-
-  // Fallback for local development - try common Chrome/Chromium paths
-  // This allows local testing without requiring full Puppeteer installation
-  const possiblePaths = [
-    process.env.CHROMIUM_PATH,
-    process.env.PUPPETEER_EXECUTABLE_PATH,
-    // Windows paths
-    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-    // macOS paths
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "/Applications/Chromium.app/Contents/MacOS/Chromium",
-    // Linux paths
-    "/usr/bin/google-chrome",
-    "/usr/bin/chromium",
-    "/usr/bin/chromium-browser",
-  ].filter(Boolean) as string[];
-
-  for (const path of possiblePaths) {
-    try {
-      const fs = await import("fs/promises");
-      await fs.access(path);
-      return path;
-    } catch {
-      // Path doesn't exist, try next
-      continue;
-    }
-  }
-
-  // If no path found, return undefined - will use default Puppeteer behavior
-  // This will fail gracefully with a clear error message
-  return undefined;
-}
-
-// Enhanced PDF generation using Puppeteer for HTML to PDF conversion
-// Optimized for Vercel serverless environment with local development fallback
+// Optimized PDF generation for Vercel Hobby plan (10s limit)
+// Uses @sparticuz/chromium with headless shell mode for maximum performance
 export async function generatePDF(
   data: ExpenseReportData,
   options?: { userId?: string }
@@ -94,74 +42,97 @@ export async function generatePDF(
     ).padStart(2, "0")}`;
     const filename = `reimburseme_${userSlug}_${periodStr}.pdf`;
 
-    // Get Chromium executable path (with fallback for local dev)
-    const executablePath = await getChromiumExecutablePath();
+    // Configure Chromium for Vercel serverless environment
+    // Always use @sparticuz/chromium on Vercel (detected by VERCEL env var)
+    const isVercel = process.env.VERCEL === "1" || process.env.VERCEL === "true";
+    
+    let executablePath: string | undefined;
+    let launchArgs: string[];
+    let defaultViewport: { width: number; height: number } | undefined;
 
-    if (!executablePath) {
-      throw new Error(
-        "Chromium executable not found. " +
-        "On Vercel: Ensure @sparticuz/chromium is installed. " +
-        "Local dev: Install Chrome/Chromium or set CHROMIUM_PATH environment variable."
-      );
+    if (isVercel) {
+      // On Vercel: Force use of @sparticuz/chromium
+      // Get executable path - this MUST work on Vercel
+      executablePath = await chromium.executablePath();
+      
+      if (!executablePath) {
+        throw new Error(
+          "Failed to get Chromium executable path on Vercel. " +
+          "Ensure @sparticuz/chromium is properly installed."
+        );
+      }
+
+      launchArgs = chromium.args;
+      defaultViewport = chromium.defaultViewport;
+    } else {
+      // Local development: try to find Chrome/Chromium
+      const possiblePaths = [
+        process.env.CHROMIUM_PATH,
+        process.env.PUPPETEER_EXECUTABLE_PATH,
+        "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+        "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/usr/bin/google-chrome",
+        "/usr/bin/chromium",
+      ].filter(Boolean) as string[];
+
+      for (const path of possiblePaths) {
+        try {
+          const fs = await import("fs/promises");
+          await fs.access(path);
+          executablePath = path;
+          break;
+        } catch {
+          continue;
+        }
+      }
+
+      if (!executablePath) {
+        throw new Error(
+          "Chrome/Chromium not found for local development. " +
+          "Install Chrome or set CHROMIUM_PATH environment variable."
+        );
+      }
+
+      launchArgs = [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+      ];
     }
 
-    // Check if we're using serverless Chromium from @sparticuz/chromium
-    // The serverless Chromium path is typically in /tmp or /var/task
-    // More specific checks to avoid false positives with local Chrome paths
-    const isServerlessChromium = 
-      process.env.VERCEL === "1" ||
-      process.env.AWS_LAMBDA_FUNCTION_NAME !== undefined ||
-      executablePath.includes("/tmp/") || 
-      executablePath.includes("/var/task/") ||
-      executablePath.includes("/var/runtime/") ||
-      (executablePath.includes("chromium") && 
-       !executablePath.includes("Chrome") && 
-       !executablePath.includes("chrome.exe"));
-
-    // Configure launch options for Vercel serverless environment
-    const launchOptions: Parameters<typeof puppeteer.launch>[0] = {
+    // Launch Puppeteer with optimized configuration
+    // Use 'shell' headless mode for better performance (as per Puppeteer docs)
+    // Shell mode is faster and perfect for PDF generation from HTML
+    browser = await puppeteer.launch({
       executablePath,
-      headless: true,
-      args: isServerlessChromium 
-        ? chromium.args 
-        : [
-            "--no-sandbox",
-            "--disable-setuid-sandbox",
-            "--disable-dev-shm-usage",
-            "--disable-gpu",
-            "--disable-web-security",
-          ],
-    };
+      headless: "shell", // Use shell mode for maximum performance (faster than true)
+      args: launchArgs,
+      defaultViewport: defaultViewport || { width: 1200, height: 800 },
+    });
 
-    // Only set defaultViewport if using serverless Chromium
-    if (isServerlessChromium && chromium.defaultViewport) {
-      launchOptions.defaultViewport = chromium.defaultViewport;
-    }
-
-    // Launch Puppeteer with appropriate configuration
-    browser = await puppeteer.launch(launchOptions);
+    console.log("Browser launched", browser.version());
 
     let page;
     try {
       page = await browser.newPage();
 
-      // Set viewport for better PDF rendering (override default if needed)
+      // Set viewport for PDF rendering
       await page.setViewport({ width: 1200, height: 800 });
 
-      // Set HTML content with timeout optimized for Vercel
-      // Vercel Hobby: 10s limit, Pro: 60s limit
-      // Using 25s to leave buffer for PDF generation
-      // Using "load" instead of "networkidle0" for faster rendering
+      // Set HTML content - optimized for Vercel Hobby (10s limit)
+      // Use "domcontentloaded" for fastest rendering (HTML is static, no external resources)
       await page.setContent(htmlContent, {
-        waitUntil: "load", // Faster than networkidle0, sufficient for static HTML
-        timeout: 25000,
+        waitUntil: "domcontentloaded", // Fastest option for static HTML
+        timeout: 8000, // 8s timeout to leave 2s for PDF generation
       });
 
       // Emulate print media for better PDF rendering
       await page.emulateMediaType("print");
 
-      // Generate PDF with print-friendly options and timeout
-      // Reduced timeout to work within Vercel's limits
+      // Generate PDF - optimized for speed
+      // Vercel Hobby has 10s limit, so we need to be fast
       const pdfUint8Array = await page.pdf({
         format: "A4",
         printBackground: true,
@@ -173,7 +144,7 @@ export async function generatePDF(
         },
         preferCSSPageSize: false,
         displayHeaderFooter: false,
-      timeout: 25000, // Reduced for Vercel compatibility
+        timeout: 8000, // 8s timeout for PDF generation
       });
 
       // Convert to Buffer
