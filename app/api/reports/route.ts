@@ -341,6 +341,31 @@ export async function POST(request : NextRequest) : Promise<NextResponse>{
     });
   } catch (error) {
     console.error("POST /api/reports error:", error);
+    
+    // Log full error details for debugging
+    if (error instanceof Error) {
+      console.error("Error name:", error.name);
+      console.error("Error message:", error.message);
+      console.error("Error stack:", error.stack);
+    }
+    
+    // Check if it's a PDF generation error
+    if (error instanceof Error && (
+      error.message.includes("PDF") || 
+      error.message.includes("PDFShift") ||
+      error.message.includes("generatePDF")
+    )) {
+      return NextResponse.json(
+        { 
+          error: "Failed to generate PDF report",
+          message: error.message,
+          details: process.env.NODE_ENV === "development" ? error.stack : undefined
+        },
+        { status: 500 }
+      );
+    }
+    
+    // For other errors, use the database error handler
     return handleDatabaseError(error as Error);
   }
 }

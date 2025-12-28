@@ -77,7 +77,8 @@ export async function generatePDF(
       throw new Error(
         "PDFSHIFT_API_KEY environment variable is not set. " +
         "Get your free API key at https://pdfshift.io/ (100 free PDFs/month, no credit card required). " +
-        "Then add it to your Vercel environment variables."
+        "For local development: Add PDFSHIFT_API_KEY=your_key to .env.local file and restart the dev server. " +
+        "For Vercel: Add it in Project Settings → Environment Variables."
       );
     }
 
@@ -105,42 +106,73 @@ export async function generatePDF(
       const timeoutId = setTimeout(() => controller.abort(), 8000);
 
       try {
-        const response = await fetch("https://api.pdfshift.io/v3/convert/pdf", {
-          method: "POST",
-          headers: {
-            "Authorization": `Basic ${Buffer.from(`api:${apiKey}`).toString("base64")}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            source: htmlContent,
-            format: "A4",
-            margin: "0.5in",
-            print_background: true,
-            wait_for: "networkidle0",
-            wait: 2000, // Wait 2s for fonts/resources to load
-            sandbox: false,
-          }),
-          signal: controller.signal,
-        });
+        console.log("[PDF] Starting PDF generation request to PDFShift...");
+        console.log("[PDF] API key length:", apiKey?.length || 0);
+        console.log("[PDF] API key prefix:", apiKey?.substring(0, 10) || "none");
+        console.log("[PDF] HTML content length:", htmlContent.length);
+        
+        // PDFShift API: Use X-API-Key header (updated authentication method)
+        let response: Response;
+        try {
+          response = await fetch("https://api.pdfshift.io/v3/convert/pdf", {
+            method: "POST",
+            headers: {
+              "X-API-Key": apiKey,
+              "Content-Type": "application/json",
+              "Accept": "application/pdf",
+              "User-Agent": "ReimburseApp/1.0",
+            },
+            body: JSON.stringify({
+              source: htmlContent,
+              format: "A4",
+              margin: "0.5in",
+            }),
+            signal: controller.signal,
+          });
+        } catch (fetchError) {
+          clearTimeout(timeoutId);
+          console.error("[PDF] Fetch error:", fetchError);
+          if (fetchError instanceof Error) {
+            throw new Error(`Network error calling PDFShift API: ${fetchError.message}`);
+          }
+          throw new Error("Network error calling PDFShift API: Unknown error");
+        }
 
         clearTimeout(timeoutId);
+
+        console.log(`[PDF] PDFShift response status: ${response.status}`);
+        console.log(`[PDF] PDFShift response headers:`, Object.fromEntries(response.headers.entries()));
 
         // Handle HTTP errors with specific messages
         if (!response.ok) {
           let errorMessage = `PDFShift API error (${response.status}): `;
+          let errorDetails: any = null;
           
           try {
-            const errorData = await response.json();
-            errorMessage += errorData.message || errorData.error || JSON.stringify(errorData);
-          } catch {
-            const errorText = await response.text();
-            errorMessage += errorText || response.statusText;
+            const contentType = response.headers.get("content-type");
+            console.log(`[PDF] Error response content-type:`, contentType);
+            
+            if (contentType?.includes("application/json")) {
+              errorDetails = await response.json();
+              console.error(`[PDF] PDFShift JSON error response:`, errorDetails);
+              errorMessage += errorDetails.message || errorDetails.error || errorDetails.detail || JSON.stringify(errorDetails);
+            } else {
+              const errorText = await response.text();
+              console.error(`[PDF] PDFShift text error response:`, errorText);
+              errorMessage += errorText || response.statusText;
+            }
+          } catch (parseError) {
+            console.error(`[PDF] Error parsing error response:`, parseError);
+            errorMessage += response.statusText || "Unknown error";
           }
+
+          console.error(`[PDF] PDFShift API error (final):`, errorMessage);
 
           // Specific error handling for common issues
           if (response.status === 401 || response.status === 403) {
             throw new Error(
-              "Invalid PDFShift API key. Please check your PDFSHIFT_API_KEY environment variable. " +
+              `Invalid PDFShift API key (${response.status}). ` +
+              "Please verify your PDFSHIFT_API_KEY environment variable is correct. " +
               "Get your free API key at https://pdfshift.io/ and add it to Vercel environment variables."
             );
           } else if (response.status === 429) {
@@ -150,15 +182,15 @@ export async function generatePDF(
             );
           } else if (response.status === 400) {
             throw new Error(
-              `PDFShift API: Invalid request. ${errorMessage}. ` +
-              "Please check your HTML content is valid."
+              `PDFShift API: Invalid request (400). ${errorMessage}. ` +
+              "Please check your HTML content is valid and properly formatted."
             );
           } else if (response.status >= 500) {
             throw new Error(
               `PDFShift API server error (${response.status}). This is temporary - retrying automatically...`
             );
           } else {
-            throw new Error(errorMessage);
+            throw new Error(`PDFShift API error: ${errorMessage}`);
           }
         }
 
@@ -166,11 +198,22 @@ export async function generatePDF(
         const arrayBuffer = await response.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
         
+        console.log(`[PDF] Received PDF buffer, size: ${buffer.length} bytes`);
+        
         // Validate PDF was actually generated (check PDF magic number)
-        if (buffer.length < 4 || buffer.toString("ascii", 0, 4) !== "%PDF") {
-          throw new Error("PDFShift returned invalid PDF data. The response is not a valid PDF file.");
+        if (buffer.length < 4) {
+          throw new Error("PDFShift returned empty or invalid response");
         }
         
+        const pdfHeader = buffer.toString("ascii", 0, 4);
+        if (pdfHeader !== "%PDF") {
+          console.error(`[PDF] Invalid PDF header: ${pdfHeader} (expected %PDF)`);
+          throw new Error(
+            `PDFShift returned invalid PDF data. Expected PDF file but got: ${pdfHeader.substring(0, 50)}...`
+          );
+        }
+        
+        console.log("[PDF] PDF generation successful!");
         return buffer;
       } catch (error) {
         clearTimeout(timeoutId);
@@ -181,6 +224,11 @@ export async function generatePDF(
             "PDF generation timed out after 8 seconds. " +
             "This might be due to slow network or large HTML content. Please try again."
           );
+        }
+        
+        // Re-throw with more context
+        if (error instanceof Error) {
+          console.error(`[PDF] PDF generation error:`, error.message);
         }
         
         throw error;
