@@ -1,4 +1,5 @@
-import puppeteer from "puppeteer";
+import puppeteer from "puppeteer-core";
+import chromium from "@sparticuz/chromium-min";
 import { generateHTML, ExpenseReportData } from "./htmlTemplates";
 
 export interface GeneratePDFOptions {
@@ -36,40 +37,41 @@ export async function generatePDF(
     ).padStart(2, "0")}`;
     const filename = `reimburseme_${userSlug}_${periodStr}.pdf`;
 
-    // Platform-specific launch arguments for cross-platform compatibility
-    const baseArgs = [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-accelerated-2d-canvas",
-      "--no-first-run",
-      "--no-zygote",
-      "--disable-gpu",
-      "--disable-web-security",
-      "--disable-features=VizDisplayCompositor",
-      "--disable-background-timer-throttling",
-      "--disable-backgrounding-occluded-windows",
-      "--disable-renderer-backgrounding",
-    ];
-
-    // Add platform-specific args
-    const platformArgs =
-      process.platform === "win32"
-        ? [] // Avoid --single-process on Windows as it can cause issues
-        : ["--single-process"];
-
-    const launchArgs = [...baseArgs, ...platformArgs];
-
-    // Launch Puppeteer with platform-aware options
+    // Use serverless chromium in production (Vercel), or local Chrome in development
+    const isProduction = process.env.NODE_ENV === "production";
+    
+    // Launch Puppeteer with serverless chromium for Vercel
     browser = await puppeteer.launch({
-      headless: true,
-      args: launchArgs,
+      args: isProduction
+        ? [...chromium.args, "--hide-scrollbars", "--disable-web-security"]
+        : [
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-accelerated-2d-canvas",
+            "--no-first-run",
+            "--no-zygote",
+            "--disable-gpu",
+            "--disable-web-security",
+            "--disable-features=VizDisplayCompositor",
+            "--disable-background-timer-throttling",
+            "--disable-backgrounding-occluded-windows",
+            "--disable-renderer-backgrounding",
+            ...(process.platform !== "win32" ? ["--single-process"] : []),
+          ],
+      defaultViewport: isProduction ? chromium.defaultViewport : { width: 1200, height: 800 },
+      executablePath: isProduction
+        ? await chromium.executablePath()
+        : undefined, // undefined uses locally installed Chrome in development
+      headless: isProduction ? chromium.headless : true,
     });
 
     const page = await browser.newPage();
 
-    // Set viewport for better PDF rendering
-    await page.setViewport({ width: 1200, height: 800 });
+    // Set viewport for better PDF rendering (only if not using chromium default)
+    if (!isProduction) {
+      await page.setViewport({ width: 1200, height: 800 });
+    }
 
     // Set HTML content with increased timeout for reliability
     await page.setContent(htmlContent, {
