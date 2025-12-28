@@ -4,9 +4,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 // Vercel serverless function timeout configuration
-// Pro plan: up to 60s, Hobby: 10s limit
-// PDF generation can take up to 30s, so we set maxDuration to 30s
-export const maxDuration = 30;
+// Hobby plan: 10s limit (hard limit)
+// PDF generation optimized for 10s execution
+export const maxDuration = 10;
 
 const pdfRequestSchema = z.object({
   data: z.any(), // We'll validate the structure more thoroughly
