@@ -129,8 +129,23 @@ const deleteReceipt = async (receiptId: string): Promise<void> => {
   await axios.delete(`/api/receipts/${receiptId}`);
 };
 
-const generateReport = async (reportData: ReportData): Promise<{ download_url: string; filename: string }> => {
-  const { data } = await axios.post<{ download_url: string; filename: string }>("/api/reports", reportData);
+interface ReportResponse {
+  success: boolean;
+  report: {
+    id: number;
+    pdfUrl: string | null;
+    csvUrl: string | null;
+  };
+  status?: "processing" | "completed";
+  message?: string;
+  download_url: string | null;
+  filename: string;
+  total_amount?: number;
+  receipt_count?: number;
+}
+
+const generateReport = async (reportData: ReportData): Promise<ReportResponse> => {
+  const { data } = await axios.post<ReportResponse>("/api/reports", reportData);
   return data;
 };
 
@@ -235,7 +250,68 @@ export default function DashboardPage() {
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedReceipts, setSelectedReceipts] = useState<string[]>([]);
+  const [pdfQueueStatus, setPdfQueueStatus] = useState<{
+    reportId: number | null;
+    status: 'idle' | 'queued' | 'processing' | 'completed' | 'failed';
+    queueInfo?: { position: number; estimatedTimeFormatted: string };
+    error?: string;
+  }>({ reportId: null, status: 'idle' });
   const mobileMenuRef = useRef<HTMLDivElement>(null);
+
+  // Poll for PDF generation completion with queue status
+  const pollReportStatus = async (reportId: number, maxAttempts = 30, intervalMs = 2000): Promise<string> => {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        const { data } = await axios.get(`/api/reports/queue-status?reportId=${reportId}`);
+        const report = data.report;
+
+        // Update queue status state
+        setPdfQueueStatus({
+          reportId,
+          status: report.queueStatus,
+          queueInfo: report.queueInfo,
+          error: report.errorMessage,
+        });
+
+        if (report.queueStatus === 'completed' && report.pdfUrl) {
+          // Validate that pdfUrl is actually a PDF, not HTML
+          if (report.pdfUrl.startsWith("data:text/html")) {
+            throw new Error("PDF generation failed - received HTML instead of PDF. Please try again.");
+          }
+
+          // Ensure it's a PDF data URL
+          if (!report.pdfUrl.startsWith("data:application/pdf")) {
+            if (report.pdfUrl.includes("text/html")) {
+              throw new Error("PDF generation failed - invalid PDF format. Please try again.");
+            }
+          }
+
+          // Clear queue status
+          setPdfQueueStatus({ reportId: null, status: 'idle' });
+          return report.pdfUrl;
+        }
+
+        if (report.queueStatus === 'failed') {
+          setPdfQueueStatus({ reportId: null, status: 'idle' });
+          throw new Error(report.errorMessage || "PDF generation failed. Please try again.");
+        }
+
+        // Wait before next poll
+        await new Promise(resolve => setTimeout(resolve, intervalMs));
+      } catch (error) {
+        console.error("Error polling report status:", error);
+        setPdfQueueStatus({ reportId: null, status: 'idle' });
+        // If it's our validation error, throw it as-is
+        if (error instanceof Error && (error.message.includes("PDF generation failed") || error.message.includes("report not found"))) {
+          throw error;
+        }
+        throw new Error("Failed to check report status");
+      }
+    }
+
+    setPdfQueueStatus({ reportId: null, status: 'idle' });
+    throw new Error("PDF generation timed out after 60 seconds. Please try again.");
+  };
 
   // Close mobile menu when clicking outside
   useEffect(() => {
@@ -310,20 +386,80 @@ export default function DashboardPage() {
 
   const reportMutation = useMutation({
     mutationFn: generateReport,
-    onSuccess: (data) => {
-      const link = document.createElement("a");
-      link.href = data.download_url;
-      link.download = data.filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      addToast({
-        type: 'success',
-        title: 'Report Generated',
-        message: 'Your expense report has been downloaded successfully.',
-        duration: 3000,
-      });
+    onSuccess: async (data, variables) => {
+      // For CSV, download immediately
+      if (variables.format === "csv" && data.download_url) {
+        const link = document.createElement("a");
+        link.href = data.download_url;
+        link.download = data.filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        addToast({
+          type: 'success',
+          title: 'Report Generated',
+          message: 'Your expense report has been downloaded successfully.',
+          duration: 3000,
+        });
+        return;
+      }
+
+      // For PDF, check if it's processing
+      if (variables.format === "pdf") {
+        if (data.status === "processing" || !data.download_url) {
+          // Show processing toast with queue info
+          addToast({
+            type: 'info',
+            title: 'PDF Generation Queued',
+            message: 'Your PDF is being generated. You will be notified when it\'s ready to download.',
+            duration: 5000,
+          });
+
+          // Poll for completion
+          try {
+            const pdfUrl = await pollReportStatus(data.report.id);
+
+            // Download when ready
+            const link = document.createElement("a");
+            link.href = pdfUrl;
+            link.download = data.filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            addToast({
+              type: 'success',
+              title: 'PDF Downloaded',
+              message: 'Your PDF report has been downloaded successfully.',
+              duration: 3000,
+            });
+          } catch (error) {
+            console.error("Error polling for PDF:", error);
+            addToast({
+              type: 'error',
+              title: 'PDF Generation Failed',
+              message: error instanceof Error ? error.message : 'Failed to generate PDF. Please try again.',
+              duration: 5000,
+            });
+          }
+        } else if (data.download_url) {
+          // PDF was ready immediately (shouldn't happen with async, but handle it)
+          const link = document.createElement("a");
+          link.href = data.download_url;
+          link.download = data.filename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+
+          addToast({
+            type: 'success',
+            title: 'Report Generated',
+            message: 'Your expense report has been downloaded successfully.',
+            duration: 3000,
+          });
+        }
+      }
     },
     onError: (error: unknown) => {
       console.error("Error generating report:", error);
@@ -1010,6 +1146,36 @@ export default function DashboardPage() {
               </div>
             )}
 
+            {/* Queue Status Display */}
+            {pdfQueueStatus.status !== 'idle' && (
+              <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
+                <div className="flex items-center gap-3">
+                  <div className="flex-shrink-0">
+                    {pdfQueueStatus.status === 'queued' && <Spinner className="size-5 text-blue-600" />}
+                    {pdfQueueStatus.status === 'processing' && <Spinner className="size-5 text-orange-600" />}
+                    {pdfQueueStatus.status === 'completed' && <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center"><div className="w-2 h-2 bg-green-600 rounded-full"></div></div>}
+                    {pdfQueueStatus.status === 'failed' && <AlertCircle className="w-5 h-5 text-red-500" />}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-blue-800">
+                      {pdfQueueStatus.status === 'queued' && 'PDF Generation Queued'}
+                      {pdfQueueStatus.status === 'processing' && 'Generating PDF...'}
+                      {pdfQueueStatus.status === 'completed' && 'PDF Ready!'}
+                      {pdfQueueStatus.status === 'failed' && 'PDF Generation Failed'}
+                    </p>
+                    {pdfQueueStatus.queueInfo && (
+                      <p className="text-xs text-blue-600 mt-1">
+                        Queue position: {pdfQueueStatus.queueInfo.position} • Estimated time: {pdfQueueStatus.queueInfo.estimatedTimeFormatted}
+                      </p>
+                    )}
+                    {pdfQueueStatus.error && (
+                      <p className="text-xs text-red-600 mt-1">{pdfQueueStatus.error}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-3 justify-end">
               <button
@@ -1022,11 +1188,11 @@ export default function DashboardPage() {
               </button>
               <button
                 onClick={() => handleGenerateReport("pdf")}
-                disabled={reportMutation.isPending || receipts.length === 0}
+                disabled={reportMutation.isPending || receipts.length === 0 || pdfQueueStatus.status === 'processing'}
                 className="flex items-center justify-center gap-2 px-4 sm:px-6 py-3 bg-[#2E86DE] hover:bg-[#2574C7] text-white font-medium rounded-xl transition-colors disabled:opacity-50 text-sm sm:text-base"
               >
                 <Download size={18} />
-                PDF Report
+                {pdfQueueStatus.status === 'processing' ? 'Generating PDF...' : 'PDF Report'}
               </button>
             </div>
 

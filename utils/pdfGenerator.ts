@@ -23,13 +23,13 @@ async function retryRequest<T>(
   delayMs: number = 1000
 ): Promise<T> {
   let lastError: Error;
-  
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
-      
+
       if (attempt < maxRetries) {
         const delay = delayMs * attempt; // Exponential backoff
         console.warn(`PDF generation attempt ${attempt} failed, retrying in ${delay}ms...`, lastError.message);
@@ -37,7 +37,7 @@ async function retryRequest<T>(
       }
     }
   }
-  
+
   throw lastError!;
 }
 
@@ -48,11 +48,11 @@ function validateHTML(html: string): void {
   if (!html || typeof html !== "string") {
     throw new Error("HTML content is invalid: must be a non-empty string");
   }
-  
+
   if (html.length === 0) {
     throw new Error("HTML content is empty");
   }
-  
+
   // Basic HTML structure validation
   if (!html.includes("<html") && !html.includes("<!DOCTYPE")) {
     throw new Error("HTML content appears to be invalid: missing HTML structure");
@@ -65,7 +65,7 @@ export async function generatePDF(
 ): Promise<PDFResult> {
   try {
     // Step 1: Validate API key exists (with helpful error message)
-    const apiKey = "sk_b4c0fc737016d51781d70fcdbac6aa6447324e59";
+    const apiKey = process.env.PDFSHIFT_API_KEY;
     if (!apiKey || apiKey.trim().length === 0) {
       throw new Error(
         "PDFSHIFT_API_KEY environment variable is not set. " +
@@ -76,7 +76,7 @@ export async function generatePDF(
 
     // Step 2: Generate HTML content
     const htmlContent = generateHTML(data);
-    
+
     // Step 3: Validate HTML content (prevents invalid requests)
     validateHTML(htmlContent);
 
@@ -93,9 +93,9 @@ export async function generatePDF(
 
     // Step 5: Generate PDF using PDFShift API with retry logic and timeout
     const pdfBuffer = await retryRequest(async () => {
-      // Create AbortController for timeout (8s max for Vercel Hobby)
+      // Create AbortController for timeout (6s max to leave 4s buffer for Vercel 10s limit)
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
 
       try {
         const response = await fetch("https://api.pdfshift.io/v3/convert/pdf", {
@@ -109,22 +109,33 @@ export async function generatePDF(
             format: "A4",
             margin: "0.5in",
             // Only using basic parameters - PDFShift API v3 doesn't support background/wait_until
+            // Using minimal options to reduce processing time
           }),
           signal: controller.signal,
         });
 
         clearTimeout(timeoutId);
 
+        // Check content type FIRST (before reading body) to catch HTML error pages
+        const contentType = response.headers.get("content-type") || "";
+
         // Handle HTTP errors with specific messages
         if (!response.ok) {
           let errorMessage = `PDFShift API error (${response.status}): `;
-          
+
+          // Clone response to read body without consuming it
+          const responseClone = response.clone();
+
           try {
-            const errorData = await response.json();
+            const errorData = await responseClone.json();
             errorMessage += errorData.message || errorData.error || JSON.stringify(errorData);
           } catch {
-            const errorText = await response.text();
-            errorMessage += errorText || response.statusText;
+            try {
+              const errorText = await responseClone.text();
+              errorMessage += errorText || response.statusText;
+            } catch {
+              errorMessage += response.statusText;
+            }
           }
 
           // Specific error handling for common issues
@@ -152,19 +163,56 @@ export async function generatePDF(
           }
         }
 
+        // Validate content type - PDFShift should return application/pdf
+        // Even if status is 200, check content-type to catch HTML error pages
+        if (!contentType.includes("application/pdf") && !contentType.includes("pdf")) {
+          // Read the response to see what we got (only if not PDF)
+          const responseText = await response.text();
+          console.error("PDFShift returned non-PDF content:", {
+            contentType,
+            status: response.status,
+            preview: responseText.substring(0, 500)
+          });
+
+          // Check if it's an HTML error page
+          if (responseText.includes("<!doctype") || responseText.includes("<html") || contentType.includes("text/html")) {
+            throw new Error(
+              "PDFShift returned an HTML error page instead of PDF. " +
+              "This usually means: 1) Invalid API key, 2) Account limit reached, 3) Service error. " +
+              "Please check your PDFShift account at https://pdfshift.io/"
+            );
+          }
+
+          throw new Error(
+            `PDFShift returned ${contentType} instead of PDF. ` +
+            "Please check your PDFShift API key and account status."
+          );
+        }
+
         // Get PDF buffer
         const arrayBuffer = await response.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
-        
+
         // Validate PDF was actually generated (check PDF magic number)
         if (buffer.length < 4 || buffer.toString("ascii", 0, 4) !== "%PDF") {
+          // Double-check if it's HTML (shouldn't happen if content-type check worked)
+          const bufferStart = buffer.toString("ascii", 0, 100).toLowerCase();
+          if (bufferStart.includes("<!doctype") || bufferStart.includes("<html")) {
+            const htmlContent = buffer.toString("utf-8");
+            console.error("PDFShift returned HTML instead of PDF (bypassed content-type check):", htmlContent.substring(0, 1000));
+            throw new Error(
+              "PDFShift returned HTML instead of PDF. This usually means: " +
+              "1) Invalid API key, 2) Account limit reached, 3) Service error. " +
+              "Please check your PDFShift account."
+            );
+          }
           throw new Error("PDFShift returned invalid PDF data. The response is not a valid PDF file.");
         }
-        
+
         return buffer;
       } catch (error) {
         clearTimeout(timeoutId);
-        
+
         // Handle timeout specifically
         if (error instanceof Error && error.name === "AbortError") {
           throw new Error(
@@ -172,10 +220,10 @@ export async function generatePDF(
             "This might be due to slow network or large HTML content. Please try again."
           );
         }
-        
+
         throw error;
       }
-    }, 3, 1000);
+    }, 1, 0); // Only 1 attempt (no retries) to stay under 10s limit
 
     if (!pdfBuffer || pdfBuffer.length === 0) {
       throw new Error("PDF generation returned empty result");
@@ -187,7 +235,7 @@ export async function generatePDF(
         1 +
         (data.appendix?.include_receipt_gallery ? 1 : 0)
     );
- // Step 8: Create data URL for the PDF
+  // Step 8: Create data URL for the PDF
     const pdfDataUrl = `data:application/pdf;base64,${pdfBuffer.toString(
       "base64"
     )}`;
@@ -202,15 +250,15 @@ export async function generatePDF(
     };
   } catch (error) {
     if (error instanceof Error) {
-      if (error.message.includes("PDFSHIFT_API_KEY") || 
+      if (error.message.includes("PDFSHIFT_API_KEY") ||
           error.message.includes("PDFShift API") ||
           error.message.includes("HTML content") ||
           error.message.includes("rate limit") ||
           error.message.includes("Invalid PDFShift")) {
         throw error;
       }
-      
-      if (error.message.includes("fetch") || 
+
+      if (error.message.includes("fetch") ||
           error.message.includes("network") ||
           error.message.includes("timeout") ||
           error.message.includes("ECONNREFUSED") ||
@@ -221,13 +269,13 @@ export async function generatePDF(
           "The request will be retried automatically. If this persists, check your internet connection."
         );
       }
-      
+
       throw new Error(
         `Failed to generate PDF: ${error.message}. ` +
         "If this persists, verify: 1) PDFSHIFT_API_KEY is set correctly, 2) You haven't exceeded free tier (100/month), 3) Network connection is stable."
       );
     }
-    
+
     throw new Error(
       `Failed to generate PDF: Unknown error occurred. ` +
       "Please check: 1) PDFSHIFT_API_KEY environment variable is set, 2) You have free tier credits remaining, 3) Your HTML content is valid."

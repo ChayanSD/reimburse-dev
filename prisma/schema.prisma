@@ -89,16 +89,22 @@ model Receipt {
 
 // Reports table
 model Report {
-  id           Int      @id @default(autoincrement())
-  userId       Int      @map("user_id")
-  periodStart  DateTime @map("period_start") @db.Date
-  periodEnd    DateTime @map("period_end") @db.Date
-  title        String?  @db.VarChar(255)
-  totalAmount  Decimal  @map("total_amount") @db.Decimal(10, 2)
-  receiptCount Int      @default(0) @map("receipt_count")
-  pdfUrl       String?  @map("pdf_url") @db.Text
-  csvUrl       String?  @map("csv_url") @db.Text
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id                Int       @id @default(autoincrement())
+  userId            Int       @map("user_id")
+  periodStart       DateTime  @map("period_start") @db.Date
+  periodEnd         DateTime  @map("period_end") @db.Date
+  title             String?   @db.VarChar(255)
+  totalAmount       Decimal   @map("total_amount") @db.Decimal(10, 2)
+  receiptCount      Int       @default(0) @map("receipt_count")
+  pdfUrl            String?   @map("pdf_url") @db.Text
+  csvUrl            String?   @map("csv_url") @db.Text
+  queueStatus       String    @default("pending") @map("queue_status") @db.VarChar(20)
+  queuePosition     Int?      @map("queue_position")
+  estimatedTime     Int?      @map("estimated_time") // in seconds
+  processingStarted DateTime? @map("processing_started") @db.Timestamptz(6)
+  processingEnded   DateTime? @map("processing_ended") @db.Timestamptz(6)
+  errorMessage      String?   @map("error_message") @db.Text
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   // Relations
   user AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -106,6 +112,7 @@ model Report {
   @@index([userId], map: "idx_reports_user_id")
   @@index([periodStart, periodEnd], map: "idx_reports_period")
   @@index([createdAt], map: "idx_reports_created_at")
+  @@index([queueStatus], map: "idx_reports_queue_status")
   @@map("reports")
 }
 

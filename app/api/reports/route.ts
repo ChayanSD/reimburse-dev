@@ -5,7 +5,12 @@ import { generatePDF, PDFResult } from "@/utils/pdfGenerator";
 import { badRequest, unauthorized, notFound, subscriptionLimitReached, handleDatabaseError, handleValidationError } from "@/lib/error";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { Client } from "@upstash/qstash";
 import type { AuthUser, CompanySettings, Receipt } from "../../generated/prisma/client";
+
+const qstashClient = new Client({
+  token: process.env.QSTASH_TOKEN!,
+});
 
 // Vercel serverless function timeout configuration
 // Hobby plan: 10s limit (hard limit)
@@ -283,7 +288,36 @@ export async function POST(request : NextRequest) : Promise<NextResponse>{
       const blob = Buffer.from(reportData).toString("base64");
       reportUrl = `data:${mimeType};base64,${blob}`;
     } else {
-      // Use new professional PDF export with company settings and proper user name
+      // PDF format - generate filename for response
+      const userSlug = user.email
+        .split("@")[0]
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
+      const periodStart = new Date(period_start);
+      const periodStr = `${periodStart.getFullYear()}-${String(
+        periodStart.getMonth() + 1
+      ).padStart(2, "0")}`;
+      filename = `reimburseme_${userSlug}_${periodStr}.pdf`;
+    }
+
+    // Save report record to database (PDF URL will be null initially for async generation)
+    const report = await prisma.report.create({
+      data: {
+        userId,
+        periodStart: new Date(period_start),
+        periodEnd: new Date(period_end),
+        title,
+        totalAmount,
+        csvUrl: format === "csv" ? reportUrl : null,
+        pdfUrl: null, // Will be updated when PDF generation completes
+        receiptCount: receipts.length,
+        queueStatus: format === "pdf" ? "queued" : "completed", // Set status for PDF generation
+      }
+    });
+
+    // For PDF format, queue the generation job with QStash
+    if (format === "pdf") {
+      // Prepare PDF data for async generation
       const pdfData = convertToPDFFormat(
         receipts,
         period_start,
@@ -293,42 +327,47 @@ export async function POST(request : NextRequest) : Promise<NextResponse>{
         period_end,
         title
       );
-      const pdfResult = await generatePDF(pdfData, { userId: userId.toString() });
 
-      reportData = pdfResult;
-      mimeType = "application/pdf";
-      filename = pdfResult.filename;
-      reportUrl = pdfResult.pdf_url;
-    }
+      const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/reports/generate-pdf`;
 
-    // Save report record to database
-    const report = await prisma.report.create({
-      data: {
-        userId,
-        periodStart: new Date(period_start),
-        periodEnd: new Date(period_end),
-        title,
-        totalAmount,
-        csvUrl: format === "csv" ? reportUrl : null,
-        pdfUrl: format === "pdf" ? reportUrl : null,
-        receiptCount: receipts.length
+      try {
+        await qstashClient.publishJSON({
+          url: webhookUrl,
+          body: {
+            reportId: report.id,
+            userId,
+            pdfData,
+          },
+          retries: 2,
+          timeout: "60s",
+        });
+
+        console.log(`Queued PDF generation for report ${report.id}`);
+
+        // Return immediately with pending status
+        return NextResponse.json({
+          success: true,
+          report: report,
+          status: "processing",
+          message: "PDF generation has been queued. It will be available shortly.",
+          download_url: null, // Will be available when processing completes
+          filename,
+          total_amount: totalAmount,
+          receipt_count: receipts.length,
+          // Client should poll the report endpoint to check when pdfUrl is available
+        });
+      } catch (qstashError) {
+        console.error("Failed to queue PDF generation:", qstashError);
+        // If QStash fails, we could fall back to synchronous generation
+        // But for now, return error
+        return NextResponse.json(
+          {
+            error: "Failed to queue PDF generation",
+            message: qstashError instanceof Error ? qstashError.message : "Unknown error",
+          },
+          { status: 500 }
+        );
       }
-    });
-
-    // Increment usage counter
-    await incrementUsage(userId, 'report_exports');
-
-    if (format === "pdf") {
-      return NextResponse.json({
-        success: true,
-        report: report,
-        download_url: reportUrl,
-        filename,
-        total_amount: totalAmount,
-        receipt_count: receipts.length,
-        pages: (reportData as PDFResult).pages,
-        template_used: (reportData as PDFResult).template_used,
-      });
     }
 
     return NextResponse.json({
