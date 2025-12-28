@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { reportCreateSchema } from "@/validation/report.validation";
-import { badRequest, unauthorized, notFound, handleValidationError } from "@/lib/error";
+import { checkSubscriptionLimit, incrementUsage, getUserSubscriptionInfo, getSubscriptionLimits } from "@/lib/subscriptionGuard";
+import { badRequest, unauthorized, notFound, handleValidationError, subscriptionLimitReached } from "@/lib/error";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { AuthUser, CompanySettings, Receipt } from "@/app/generated/prisma/client";
-// import type { AuthUser, CompanySettings, Receipt } from "../../generated/prisma/client";
 
-// Fast endpoint - just returns PDF data structure (no PDF generation)
-// Used for client-side PDF generation
 export const maxDuration = 10;
 
 function convertToPDFFormat(
@@ -150,6 +148,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (!session) return unauthorized();
 
     const userId = session.id;
+
+    // Check subscription limits for report exports BEFORE generating PDF data
+    const subscriptionCheck = await checkSubscriptionLimit(userId, 'report_exports');
+    if (!subscriptionCheck.allowed) {
+      // Get current usage for better error message
+      const subscription = await getUserSubscriptionInfo(userId);
+      const limits = getSubscriptionLimits(subscription?.tier || 'free');
+      
+      return subscriptionLimitReached(
+        'Reports',
+        subscription?.usageReports || 0,
+        limits.maxReports,
+        '/plans'
+      );
+    }
+
     const body = await request.json();
 
     const validation = reportCreateSchema.safeParse(body);
@@ -228,6 +242,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       periodStart.getMonth() + 1
     ).padStart(2, "0")}`;
     const filename = `reimburseme_${userSlug}_${periodStr}.pdf`;
+
+    // Increment usage counter after successful PDF data generation
+    await incrementUsage(userId, 'report_exports');
 
     return NextResponse.json({
       success: true,
