@@ -110,7 +110,7 @@ interface ReportData {
   period_end: string;
   title?: string;
   include_items?: boolean;
-  format: "csv";
+  format: "csv" | "pdf";
   company_setting_id?: number | null;
 }
 
@@ -129,54 +129,27 @@ const deleteReceipt = async (receiptId: string): Promise<void> => {
   await axios.delete(`/api/receipts/${receiptId}`);
 };
 
-const generateReport = async (reportData: ReportData): Promise<{ 
-  download_url?: string; 
-  filename?: string;
-  status?: string;
-  report_id?: number;
+interface ReportResponse {
+  success: boolean;
+  report: {
+    id: number;
+    pdfUrl: string | null;
+    csvUrl: string | null;
+  };
+  status?: "processing" | "completed";
   message?: string;
-}> => {
-  const { data } = await axios.post<{ 
-    download_url?: string; 
-    filename?: string;
-    status?: string;
-    report_id?: number;
-    message?: string;
-  }>("/api/reports", reportData);
+  download_url: string | null;
+  filename: string;
+  total_amount?: number;
+  receipt_count?: number;
+}
+
+const generateReport = async (reportData: ReportData): Promise<ReportResponse> => {
+  const { data } = await axios.post<ReportResponse>("/api/reports", reportData);
   return data;
 };
 
-// Simple, reliable PDF generation using browser print
-const generateSimplePDF = async (reportData: ReportData): Promise<{ success: boolean; filename?: string; error?: string }> => {
-  try {
-    // Get PDF data from server (fast - no PDF generation)
-    const { data: pdfDataResponse } = await axios.post<{
-      success: boolean;
-      pdfData: any;
-      filename: string;
-    }>("/api/reports/pdf-data", reportData);
 
-    if (!pdfDataResponse.success || !pdfDataResponse.pdfData) {
-      throw new Error("Failed to get PDF data");
-    }
-
-    // Use simple browser print-to-PDF (100% reliable)
-    const { generateSimplePDF: generatePDF } = await import("@/utils/simplePdfGenerator");
-    
-    // Generate PDF using browser print
-    const result = await generatePDF(pdfDataResponse.pdfData, {
-      filename: pdfDataResponse.filename,
-    });
-
-    return result;
-  } catch (error) {
-    console.error("PDF generation error:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
-  }
-};
 
 // Helper function to get user's display name
 const getUserDisplayName = (user: User | null): string => {
@@ -281,6 +254,8 @@ export default function DashboardPage() {
   const [selectedReceipts, setSelectedReceipts] = useState<string[]>([]);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
+
+
   // Close mobile menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -356,12 +331,9 @@ export default function DashboardPage() {
   const currentReportDataRef = useRef<ReportData | null>(null);
 
   const reportMutation = useMutation({
-    mutationFn: async (reportData: ReportData) => {
-      currentReportDataRef.current = reportData; // Store for error fallback
-      return generateReport(reportData);
-    },
-    onSuccess: async (data) => {
-      // CSV download (only format we handle now)
+    mutationFn: generateReport,
+    onSuccess: async (data, variables) => {
+      // For CSV or PDF, if download available, verify and download
       if (data.download_url && data.filename) {
         const link = document.createElement("a");
         link.href = data.download_url;
@@ -373,12 +345,21 @@ export default function DashboardPage() {
         addToast({
           type: 'success',
           title: 'Report Generated',
-          message: 'Your expense report has been downloaded successfully.',
+          message: 'Your report has been downloaded successfully.',
           duration: 3000,
+        });
+      } else {
+        // Should not happen with synchronous generation unless error
+        console.error("No download URL returned", data);
+         addToast({
+          type: 'error',
+          title: 'Generation Failed',
+          message: 'Report generation completed but no file was returned.',
+          duration: 5000,
         });
       }
     },
-    onError: async (error: unknown) => {
+    onError: (error: unknown) => {
       console.error("Error generating report:", error);
       
       // Type guard for axios error
@@ -519,95 +500,9 @@ export default function DashboardPage() {
     setSelectedReceipts(checked ? receipts.map(r => r.id) : []);
   }, [receipts]);
 
-  // Client-side PDF generation handler (instant, no server needed)
-  const handleGenerateClientPDF = async () => {
-    const receiptsToExport = selectedReceipts.length > 0 ? receipts.filter(r => selectedReceipts.includes(r.id)) : receipts;
-    
-    if (receiptsToExport.length === 0) {
-      addToast({
-        type: 'error',
-        title: 'No Receipts',
-        message: 'Please select receipts to generate a PDF report.',
-        duration: 3000,
-      });
-      return;
-    }
 
-    addToast({
-      type: 'info',
-      title: 'Generating PDF...',
-      message: 'Generating PDF in your browser (this may take a few seconds)...',
-      duration: 3000,
-    });
 
-    try {
-      // Calculate date range
-      const now = new Date();
-      let startDate: Date;
-      let endDate: Date = now;
-
-      switch (filters.dateRange) {
-        case "current_month":
-          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-          break;
-        case "last_30":
-          startDate = new Date(now);
-          startDate.setDate(now.getDate() - 30);
-          break;
-        case "last_90":
-          startDate = new Date(now);
-          startDate.setDate(now.getDate() - 90);
-          break;
-        case "custom":
-          startDate = filters.customStartDate ? new Date(filters.customStartDate) : new Date(0);
-          endDate = filters.customEndDate ? new Date(filters.customEndDate) : now;
-          break;
-        default:
-          if (receiptsToExport.length > 0) {
-            const dates = receiptsToExport
-              .map(r => r.receipt_date ? new Date(r.receipt_date) : null)
-              .filter((d): d is Date => d !== null && !isNaN(d.getTime()));
-            startDate = dates.length > 0 ? new Date(Math.min(...dates.map(d => d.getTime()))) : new Date(now.getFullYear(), now.getMonth() - 3, 1);
-          } else {
-            startDate = new Date(now.getFullYear(), now.getMonth() - 3, 1);
-          }
-          break;
-      }
-
-      const formatDate = (date: Date) => date.toISOString().split('T')[0];
-
-      const reportData: ReportData = {
-        receipt_ids: receiptsToExport.map((r) => Number(r.id)),
-        period_start: formatDate(startDate),
-        period_end: formatDate(endDate),
-        format: "csv",
-        company_setting_id: selectedCompanySetting,
-      };
-
-      const clientResult = await generateSimplePDF(reportData);
-      
-      if (clientResult.success) {
-        addToast({
-          type: 'success',
-          title: 'PDF Generated',
-          message: `Your PDF "${clientResult.filename}" has been downloaded successfully.`,
-          duration: 3000,
-        });
-      } else {
-        throw new Error(clientResult.error || "Client-side generation failed");
-      }
-    } catch (error) {
-      console.error("Client-side PDF generation error:", error);
-      addToast({
-        type: 'error',
-        title: 'PDF Generation Failed',
-        message: error instanceof Error ? error.message : 'Failed to generate PDF. Please try again.',
-        duration: 5000,
-      });
-    }
-  };
-
-  const handleGenerateReport = async (format: "csv") => {
+  const handleGenerateReport = async (format: "csv" | "pdf") => {
     const receiptsToExport = selectedReceipts.length > 0 ? receipts.filter(r => selectedReceipts.includes(r.id)) : receipts;
 
     // Calculate date range based on filters
@@ -1155,6 +1050,8 @@ export default function DashboardPage() {
               </div>
             )}
 
+
+
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-3 justify-end">
               <button
@@ -1167,13 +1064,13 @@ export default function DashboardPage() {
               </button>
               {/* Simple browser print-to-PDF - 100% reliable */}
               <button
-                onClick={handleGenerateClientPDF}
+                onClick={() => handleGenerateReport("pdf")}
                 disabled={reportMutation.isPending || receipts.length === 0}
                 className="flex items-center justify-center gap-2 px-4 sm:px-6 py-3 bg-[#2E86DE] hover:bg-[#2574C7] text-white font-medium rounded-xl transition-colors disabled:opacity-50 text-sm sm:text-base"
                 title="Open print dialog to save as PDF (works everywhere, 100% reliable)"
               >
                 <Download size={18} />
-                PDF Report
+                {reportMutation.isPending ? 'Generating PDF...' : 'PDF Report'}
               </button>
             </div>
 

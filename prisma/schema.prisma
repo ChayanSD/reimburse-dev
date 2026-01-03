@@ -98,7 +98,8 @@ model Report {
   receiptCount Int      @default(0) @map("receipt_count")
   pdfUrl       String?  @map("pdf_url") @db.Text
   csvUrl       String?  @map("csv_url") @db.Text
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   // Relations
   user AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
