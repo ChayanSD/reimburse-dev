@@ -82,90 +82,103 @@ export interface ExpenseReportData {
   signoff?: Signoff;
 }
 
-// Clean, professional styles - optimized for space efficiency
+// Improved professional styles with better typography
 const styles = StyleSheet.create({
   page: {
     backgroundColor: '#ffffff',
-    padding: 30,
+    padding: 40,
     fontFamily: 'Helvetica',
-    fontSize: 9,
-    color: '#1a1a1a',
+    fontSize: 10,
+    color: '#1f2937',
   },
   
-  // Header - compact and clean
+  // Header - clear and prominent
   header: {
-    marginBottom: 20,
-    paddingBottom: 15,
-    borderBottom: '2px solid #2563eb',
+    marginBottom: 25,
+    paddingBottom: 20,
+    borderBottom: '3px solid #2563eb',
   },
   
-  headerRow: {
+  headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-  },
-  
-  companySection: {
-    flex: 1,
+    marginBottom: 12,
   },
   
   companyName: {
-    fontSize: 18,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#1a1a1a',
-    marginBottom: 4,
+    color: '#111827',
+    marginBottom: 6,
+    letterSpacing: -0.5,
   },
   
-  reportTitle: {
-    fontSize: 11,
-    color: '#4b5563',
-    marginBottom: 2,
+  reportSubtitle: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontWeight: 'normal',
   },
   
   metaSection: {
     alignItems: 'flex-end',
   },
   
-  metaText: {
-    fontSize: 8,
+  metaRow: {
+    fontSize: 9,
     color: '#6b7280',
-    marginBottom: 2,
+    marginBottom: 3,
   },
   
-  // Info section - compact grid
+  metaLabel: {
+    fontWeight: 'bold',
+    color: '#374151',
+  },
+  
+  // Info section - clean grid
   infoGrid: {
     flexDirection: 'row',
-    marginBottom: 15,
-    gap: 20,
+    marginBottom: 20,
+    gap: 30,
   },
   
   infoBlock: {
     flex: 1,
   },
   
-  infoLabel: {
-    fontSize: 8,
+  infoHeading: {
+    fontSize: 9,
     color: '#6b7280',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 4,
+    letterSpacing: 1,
+    marginBottom: 8,
     fontWeight: 'bold',
   },
   
   infoText: {
-    fontSize: 9,
-    color: '#1a1a1a',
-    marginBottom: 2,
+    fontSize: 10,
+    color: '#1f2937',
+    marginBottom: 4,
+    lineHeight: 1.4,
   },
   
-  // Summary - single row
-  summaryRow: {
+  infoTextBold: {
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  
+  // Summary - prominent display
+  summaryBox: {
+    backgroundColor: '#f8fafc',
+    padding: 20,
+    marginBottom: 25,
+    borderRadius: 6,
+    border: '1px solid #e2e8f0',
+  },
+  
+  summaryGrid: {
     flexDirection: 'row',
-    backgroundColor: '#f3f4f6',
-    padding: 10,
-    marginBottom: 15,
-    gap: 15,
-    borderRadius: 4,
+    gap: 25,
   },
   
   summaryItem: {
@@ -173,41 +186,60 @@ const styles = StyleSheet.create({
   },
   
   summaryLabel: {
-    fontSize: 7,
-    color: '#6b7280',
+    fontSize: 9,
+    color: '#64748b',
     textTransform: 'uppercase',
-    marginBottom: 2,
+    letterSpacing: 0.8,
+    marginBottom: 6,
   },
   
   summaryValue: {
-    fontSize: 12,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#2563eb',
+    letterSpacing: -0.5,
   },
   
-  // Table - compact and clean
-  table: {
-    marginBottom: 15,
+  summaryValueLarge: {
+    fontSize: 24,
   },
   
-  tableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#1f2937',
-    padding: '8 6',
+  // Table - clean and readable
+  tableSection: {
+    marginBottom: 20,
   },
   
-  tableHeaderCell: {
-    fontSize: 7,
+  tableTitle: {
+    fontSize: 11,
     fontWeight: 'bold',
-    color: '#ffffff',
+    color: '#111827',
+    marginBottom: 12,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   
+  tableHeader: {
+    flexDirection: 'row',
+    backgroundColor: '#1e293b',
+    padding: '10 8',
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
+  },
+  
+  tableHeaderCell: {
+    fontSize: 8,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  
   tableRow: {
     flexDirection: 'row',
-    padding: '6 6',
+    padding: '10 8',
     borderBottom: '1px solid #e5e7eb',
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
   },
   
   tableRowAlt: {
@@ -215,83 +247,107 @@ const styles = StyleSheet.create({
   },
   
   tableCell: {
-    fontSize: 8,
-    color: '#1a1a1a',
+    fontSize: 9,
+    color: '#1f2937',
+    lineHeight: 1.4,
   },
   
-  // Column widths
-  colDate: { width: '12%' },
-  colMerchant: { width: '25%' },
-  colCategory: { width: '15%' },
-  colNotes: { width: '28%' },
-  colAmount: { width: '20%', textAlign: 'right' },
+  // Column widths - optimized
+  colDate: { 
+    width: '13%',
+  },
+  colMerchant: { 
+    width: '24%',
+  },
+  colCategory: { 
+    width: '14%',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  colNotes: { 
+    width: '29%',
+  },
+  colAmount: { 
+    width: '20%', 
+    textAlign: 'right',
+  },
+  
+  merchantName: {
+    fontWeight: 'bold',
+    color: '#111827',
+  },
   
   categoryBadge: {
     backgroundColor: '#dbeafe',
     color: '#1e40af',
-    padding: '2 6',
-    borderRadius: 3,
-    fontSize: 7,
+    padding: '4 10',
+    borderRadius: 4,
+    fontSize: 8,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
   
-  amountText: {
+  amountValue: {
+    fontSize: 10,
     fontWeight: 'bold',
     color: '#059669',
   },
   
-  // Category totals - compact table
+  // Category summary
   categorySection: {
-    marginTop: 15,
+    marginTop: 25,
     marginBottom: 20,
   },
   
-  categoryTitle: {
-    fontSize: 9,
+  categorySectionTitle: {
+    fontSize: 11,
     fontWeight: 'bold',
-    marginBottom: 8,
-    color: '#1a1a1a',
+    color: '#111827',
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   
-  categoryGrid: {
-    flexDirection: 'row',
-    gap: 30,
-  },
-  
-  categoryTableWrap: {
-    flex: 1,
+  categoryTable: {
+    maxWidth: '50%',
   },
   
   categoryRow: {
     flexDirection: 'row',
-    padding: '4 0',
+    padding: '8 0',
     borderBottom: '1px solid #e5e7eb',
-  },
-  
-  categoryRowHeader: {
-    borderBottom: '2px solid #1f2937',
-    marginBottom: 4,
   },
   
   categoryName: {
     flex: 1,
-    fontSize: 8,
+    fontSize: 10,
+    color: '#1f2937',
   },
   
   categoryAmount: {
-    width: '30%',
+    width: '40%',
     textAlign: 'right',
-    fontSize: 8,
+    fontSize: 10,
     fontWeight: 'bold',
+    color: '#111827',
   },
   
   totalRow: {
-    borderTop: '2px solid #1f2937',
-    paddingTop: 6,
+    flexDirection: 'row',
+    padding: '12 0 8 0',
     marginTop: 4,
+    borderTop: '2px solid #1e293b',
   },
   
-  totalText: {
-    fontSize: 10,
+  totalLabel: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  
+  totalAmount: {
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#2563eb',
   },
@@ -299,14 +355,14 @@ const styles = StyleSheet.create({
   // Footer
   footer: {
     position: 'absolute',
-    bottom: 20,
-    left: 30,
-    right: 30,
-    paddingTop: 8,
+    bottom: 30,
+    left: 40,
+    right: 40,
+    paddingTop: 10,
     borderTop: '1px solid #e5e7eb',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    fontSize: 7,
+    fontSize: 8,
     color: '#9ca3af',
   },
 });
@@ -332,7 +388,7 @@ function formatCurrency(amount: number): string {
   });
 }
 
-// Main PDF component - clean and efficient
+// Main PDF component - professional and clear
 export const ReimburseMePDFDocument: React.FC<{ data: ExpenseReportData }> = ({ data }) => {
   const {
     reportMeta,
@@ -347,15 +403,21 @@ export const ReimburseMePDFDocument: React.FC<{ data: ExpenseReportData }> = ({ 
       <Page size="A4" style={styles.page}>
         {/* Header */}
         <View style={styles.header}>
-          <View style={styles.headerRow}>
-            <View style={styles.companySection}>
+          <View style={styles.headerTop}>
+            <View>
               <Text style={styles.companyName}>{recipient.company_name}</Text>
-              <Text style={styles.reportTitle}>Expense Reimbursement Report</Text>
+              <Text style={styles.reportSubtitle}>Expense Reimbursement Report</Text>
             </View>
             <View style={styles.metaSection}>
-              <Text style={styles.metaText}>Report ID: {reportMeta.report_id}</Text>
-              <Text style={styles.metaText}>Period: {formatDate(reportMeta.period_start)} - {formatDate(reportMeta.period_end)}</Text>
-              <Text style={styles.metaText}>Generated: {formatDate(reportMeta.generated_at)}</Text>
+              <Text style={styles.metaRow}>
+                <Text style={styles.metaLabel}>Report ID:</Text> {reportMeta.report_id}
+              </Text>
+              <Text style={styles.metaRow}>
+                <Text style={styles.metaLabel}>Period:</Text> {formatDate(reportMeta.period_start)} - {formatDate(reportMeta.period_end)}
+              </Text>
+              <Text style={styles.metaRow}>
+                <Text style={styles.metaLabel}>Generated:</Text> {formatDate(reportMeta.generated_at)}
+              </Text>
             </View>
           </View>
         </View>
@@ -363,38 +425,44 @@ export const ReimburseMePDFDocument: React.FC<{ data: ExpenseReportData }> = ({ 
         {/* Info Grid */}
         <View style={styles.infoGrid}>
           <View style={styles.infoBlock}>
-            <Text style={styles.infoLabel}>Submitted By</Text>
-            <Text style={styles.infoText}>{submitter.name}</Text>
+            <Text style={styles.infoHeading}>Submitted By</Text>
+            <Text style={[styles.infoText, styles.infoTextBold]}>{submitter.name}</Text>
             <Text style={styles.infoText}>{submitter.email}</Text>
             {submitter.department && (
               <Text style={styles.infoText}>{submitter.department}</Text>
             )}
           </View>
           <View style={styles.infoBlock}>
-            <Text style={styles.infoLabel}>Approver</Text>
-            <Text style={styles.infoText}>{recipient.approver_name}</Text>
+            <Text style={styles.infoHeading}>Approver</Text>
+            <Text style={[styles.infoText, styles.infoTextBold]}>{recipient.approver_name}</Text>
             <Text style={styles.infoText}>{recipient.approver_email}</Text>
           </View>
         </View>
 
-        {/* Summary Row */}
-        <View style={styles.summaryRow}>
-          <View style={styles.summaryItem}>
-            <Text style={styles.summaryLabel}>Total Amount</Text>
-            <Text style={styles.summaryValue}>${formatCurrency(summary?.total_reimbursable || 0)}</Text>
-          </View>
-          <View style={styles.summaryItem}>
-            <Text style={styles.summaryLabel}>Total Items</Text>
-            <Text style={styles.summaryValue}>{line_items.length}</Text>
-          </View>
-          <View style={styles.summaryItem}>
-            <Text style={styles.summaryLabel}>Currency</Text>
-            <Text style={styles.summaryValue}>{reportMeta.currency || 'USD'}</Text>
+        {/* Summary Box */}
+        <View style={styles.summaryBox}>
+          <View style={styles.summaryGrid}>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Total Amount</Text>
+              <Text style={[styles.summaryValue, styles.summaryValueLarge]}>
+                ${formatCurrency(summary?.total_reimbursable || 0)}
+              </Text>
+            </View>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Total Items</Text>
+              <Text style={styles.summaryValue}>{line_items.length}</Text>
+            </View>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Currency</Text>
+              <Text style={styles.summaryValue}>{reportMeta.currency || 'USD'}</Text>
+            </View>
           </View>
         </View>
 
         {/* Expense Items Table */}
-        <View style={styles.table}>
+        <View style={styles.tableSection}>
+          <Text style={styles.tableTitle}>Expense Details</Text>
+          
           <View style={styles.tableHeader}>
             <Text style={[styles.tableHeaderCell, styles.colDate]}>Date</Text>
             <Text style={[styles.tableHeaderCell, styles.colMerchant]}>Merchant</Text>
@@ -411,7 +479,7 @@ export const ReimburseMePDFDocument: React.FC<{ data: ExpenseReportData }> = ({ 
               <Text style={[styles.tableCell, styles.colDate]}>
                 {formatDate(item.date)}
               </Text>
-              <Text style={[styles.tableCell, styles.colMerchant]}>
+              <Text style={[styles.tableCell, styles.colMerchant, styles.merchantName]}>
                 {item.merchant}
               </Text>
               <View style={styles.colCategory}>
@@ -420,31 +488,35 @@ export const ReimburseMePDFDocument: React.FC<{ data: ExpenseReportData }> = ({ 
               <Text style={[styles.tableCell, styles.colNotes]}>
                 {item.notes || '-'}
               </Text>
-              <Text style={[styles.tableCell, styles.colAmount, styles.amountText]}>
+              <Text style={[styles.tableCell, styles.colAmount, styles.amountValue]}>
                 ${formatCurrency(item.converted_amount || item.amount)}
               </Text>
             </View>
           ))}
         </View>
 
-        {/* Category Breakdown */}
+        {/* Category Summary */}
         {summary?.totals_by_category && summary.totals_by_category.length > 0 && (
           <View style={styles.categorySection}>
-            <Text style={styles.categoryTitle}>Category Summary</Text>
-            <View style={styles.categoryGrid}>
-              <View style={styles.categoryTableWrap}>
-                {summary.totals_by_category.map((cat, idx) => (
-                  <View key={idx} style={styles.categoryRow}>
-                    <Text style={styles.categoryName}>{cat.category}</Text>
-                    <Text style={styles.categoryAmount}>${formatCurrency(cat.amount)}</Text>
-                  </View>
-                ))}
-                <View style={[styles.categoryRow, styles.totalRow]}>
-                  <Text style={[styles.categoryName, styles.totalText]}>Total</Text>
-                  <Text style={[styles.categoryAmount, styles.totalText]}>
-                    ${formatCurrency(summary.total_reimbursable)}
-                  </Text>
+            <Text style={styles.categorySectionTitle}>Category Summary</Text>
+            <View style={styles.categoryTable}>
+              {summary.totals_by_category.map((cat, idx, arr) => (
+                <View 
+                  key={idx} 
+                  style={[
+                    styles.categoryRow, 
+                    idx === arr.length - 1 ? { borderBottom: 'none' } : {}
+                  ]}
+                >
+                  <Text style={styles.categoryName}>{cat.category}</Text>
+                  <Text style={styles.categoryAmount}>${formatCurrency(cat.amount)}</Text>
                 </View>
+              ))}
+              <View style={styles.totalRow}>
+                <Text style={[styles.categoryName, styles.totalLabel]}>Total</Text>
+                <Text style={[styles.categoryAmount, styles.totalAmount]}>
+                  ${formatCurrency(summary.total_reimbursable)}
+                </Text>
               </View>
             </View>
           </View>
