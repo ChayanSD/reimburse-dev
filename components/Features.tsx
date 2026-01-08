@@ -28,7 +28,6 @@ export default function Features() {
       title: "Mobile-first design",
       description:
         "Take photos of receipts on the go. Upload from anywhere using your phone or computer.",
-      isActive: true,
     },
     {
       id: "professional-reports",

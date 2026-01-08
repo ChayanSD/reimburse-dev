@@ -162,14 +162,14 @@ const Hero: React.FC<HeroProps> = ({ className }) => {
               </div>
 
               <div
-                className={`absolute top-1/2 -right-4 transform -translate-y-1/2 transition-all duration-300 ${
+                className={`absolute bottom-4 right-4 transition-all duration-300 ${
                   calloutsVisible
                     ? "opacity-100 translate-y-0"
                     : "opacity-0 translate-y-2"
                 }`}
                 style={{ transitionDelay: "200ms" }}
               >
-                <div className="bg-[#10B981] text-white px-4 py-2 rounded-2xl font-semibold text-sm whitespace-nowrap">
+                <div className="bg-[#10B981] shadow-lg text-white px-4 py-2 rounded-2xl font-semibold text-sm whitespace-nowrap">
                   Export Ready
                 </div>
               </div>
