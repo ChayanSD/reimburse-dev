@@ -107,6 +107,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           category: file.extractedData.category,
           amount: amount,
           currency: file.extractedData.currency || "USD",
+          file_url: file.url,
         };
       });
 

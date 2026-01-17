@@ -5,6 +5,7 @@ import {
   Text,
   View,
   StyleSheet,
+  Link,
 } from '@react-pdf/renderer';
 
 export interface ReportMeta {
@@ -254,22 +255,26 @@ const styles = StyleSheet.create({
   
   // Column widths - optimized
   colDate: { 
-    width: '13%',
+    width: '12%',
   },
   colMerchant: { 
-    width: '24%',
+    width: '20%',
   },
   colCategory: { 
-    width: '14%',
+    width: '12%',
     flexDirection: 'row',
     alignItems: 'center',
   },
   colNotes: { 
-    width: '29%',
+    width: '20%',
   },
   colAmount: { 
-    width: '20%', 
+    width: '18%', 
     textAlign: 'right',
+  },
+  colReceipt: {
+    width: '18%',
+    textAlign: 'center',
   },
   
   merchantName: {
@@ -469,6 +474,7 @@ export const ReimburseMePDFDocument: React.FC<{ data: ExpenseReportData }> = ({ 
             <Text style={[styles.tableHeaderCell, styles.colCategory]}>Category</Text>
             <Text style={[styles.tableHeaderCell, styles.colNotes]}>Notes</Text>
             <Text style={[styles.tableHeaderCell, styles.colAmount]}>Amount</Text>
+            <Text style={[styles.tableHeaderCell, styles.colReceipt]}>Receipt</Text>
           </View>
 
           {line_items.map((item, idx) => (
@@ -491,6 +497,15 @@ export const ReimburseMePDFDocument: React.FC<{ data: ExpenseReportData }> = ({ 
               <Text style={[styles.tableCell, styles.colAmount, styles.amountValue]}>
                 ${formatCurrency(item.converted_amount || item.amount)}
               </Text>
+              <View style={styles.colReceipt}>
+                {item.file_url ? (
+                  <Link src={item.file_url} style={{ color: '#2563eb', fontSize: 8, textDecoration: 'underline' }}>
+                    View Receipt
+                  </Link>
+                ) : (
+                  <Text style={{ color: '#9ca3af', fontSize: 8 }}>N/A</Text>
+                )}
+              </View>
             </View>
           ))}
         </View>
