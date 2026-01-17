@@ -18,6 +18,7 @@ export interface SubscriptionInfo {
   features: string[];
   usageReceipts: number;
   usageReports: number;
+  emailConnected: boolean;
 }
 
 export interface SubscriptionLimits {
@@ -67,6 +68,7 @@ export async function getUserSubscriptionInfo(userId: number): Promise<Subscript
       features: (tier?.features as string[]) || [],
       usageReceipts,
       usageReports,
+      emailConnected: user.emailConnected,
     };
   } catch (error) {
     console.error('Error getting subscription info:', error);

@@ -18,6 +18,7 @@ interface SubscriptionData {
       receipts: number;
       reports: number;
     };
+    emailConnected: boolean;
   };
 }
 
@@ -32,6 +33,7 @@ interface SubscriptionStore {
   setError: (error: string | null) => void;
   checkSubscription: () => Promise<void>;
   refetchSubscription: () => Promise<void>;
+  emailConnected: boolean;
 }
 
 const useSubscriptionStore = create<SubscriptionStore>((set, get) => ({
@@ -77,6 +79,7 @@ const useSubscriptionStore = create<SubscriptionStore>((set, get) => ({
         subscription_tier: data.subscription.tier || "free",
         loading: false,
         error: null,
+        emailConnected: data.subscription.emailConnected || false,
       });
     } catch (error) {
       console.error("Error checking subscription:", error);
@@ -85,6 +88,7 @@ const useSubscriptionStore = create<SubscriptionStore>((set, get) => ({
         error: error instanceof Error ? error.message : "An unknown error occurred",
         status: false,
         subscription_tier: "free",
+        emailConnected: false,
       });
     }
   },
@@ -100,7 +104,8 @@ const useSubscriptionStore = create<SubscriptionStore>((set, get) => ({
       });
 
       if (!response.ok) {
-        throw new Error("Failed to check subscription status");
+        // throw new Error("Failed to check subscription status");
+        console.log("Failed to check subscription status");
       }
 
       const data: SubscriptionData = await response.json();
@@ -114,6 +119,7 @@ const useSubscriptionStore = create<SubscriptionStore>((set, get) => ({
       set({
         status: isActive,
         subscription_tier: data.subscription.tier || "free",
+        emailConnected: data.subscription.emailConnected || false,
         loading: false,
         error: null,
       });
@@ -124,9 +130,11 @@ const useSubscriptionStore = create<SubscriptionStore>((set, get) => ({
         error: error instanceof Error ? error.message : "An unknown error occurred",
         status: false,
         subscription_tier: "free",
+        emailConnected: false,
       });
     }
   },
+  emailConnected: false,
 }));
 
 interface CheckoutResponse {
@@ -145,6 +153,7 @@ export function useSubscription() {
     error,
     checkSubscription,
     refetchSubscription,
+    emailConnected,
   } = useSubscriptionStore();
 
   const initiateSubscription = useCallback(
@@ -259,6 +268,7 @@ export function useSubscription() {
     data: status,
     loading,
     error,
+    emailConnected,
     initiateSubscription,
     refetchSubscription,
   };

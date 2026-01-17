@@ -30,6 +30,11 @@ model AuthUser {
   emailVerificationToken String?   @unique @map("email_verification_token") @db.Text
   createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt              DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  gmailAccessToken       String?   @map("gmail_access_token") @db.Text
+  gmailRefreshToken      String?   @map("gmail_refresh_token") @db.Text
+  gmailTokenExpiresAt    DateTime? @map("gmail_token_expires_at") @db.Timestamptz(6)
+  emailConnected         Boolean   @default(false) @map("email_connected")
+  gmailConnectedAt       DateTime? @map("gmail_connected_at") @db.Timestamptz(6)
 
   // Relations
   receipts           Receipt[]
@@ -41,6 +46,7 @@ model AuthUser {
   referralsGiven     ReferralTracking[]  @relation("Referrer")
   referralsReceived  ReferralTracking[]  @relation("Referred")
   batchSessions      BatchSession[]
+  processedEmails    ProcessedEmail[]
 
   @@index([subscriptionTier], map: "idx_auth_users_subscription_tier")
   @@index([subscriptionStatus], map: "idx_auth_users_subscription_status")
@@ -255,15 +261,15 @@ model SubscriptionTier {
 
 // Batch sessions for bulk upload and processing
 model BatchSession {
-  id          Int      @id @default(autoincrement())
-  userId      Int      @map("user_id")
-  sessionId   String   @unique @map("session_id") @db.Text
-  files       Json     @db.JsonB // Array of {url: string, name: string, status: string, extractedData?: object}
-  status      String   @default("uploading") @db.VarChar(20) // uploading, processing, completed, failed
-  paymentId   String?  @map("payment_id") @db.Text
-  paidAt      DateTime? @map("paid_at") @db.Timestamptz(6)
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id        Int       @id @default(autoincrement())
+  userId    Int       @map("user_id")
+  sessionId String    @unique @map("session_id") @db.Text
+  files     Json      @db.JsonB // Array of {url: string, name: string, status: string, extractedData?: object}
+  status    String    @default("uploading") @db.VarChar(20) // uploading, processing, completed, failed
+  paymentId String?   @map("payment_id") @db.Text
+  paidAt    DateTime? @map("paid_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   // Relations
   user AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -271,4 +277,19 @@ model BatchSession {
   @@index([userId], map: "idx_batch_sessions_user_id")
   @@index([sessionId], map: "idx_batch_sessions_session_id")
   @@map("batch_sessions")
+}
+
+// Track processed emails to avoid duplicate scanning
+model ProcessedEmail {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  messageId String   @unique @map("message_id") @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  user AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_processed_emails_user_id")
+  @@index([messageId], map: "idx_processed_emails_message_id")
+  @@map("processed_emails")
 }

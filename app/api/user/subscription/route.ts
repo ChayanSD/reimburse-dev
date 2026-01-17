@@ -30,6 +30,7 @@ export async function GET() : Promise<NextResponse> {
           receipts: subscription.usageReceipts,
           reports: subscription.usageReports,
         },
+        emailConnected: subscription.emailConnected,
       },
     });
   } catch (error) {
