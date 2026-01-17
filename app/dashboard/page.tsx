@@ -21,6 +21,7 @@ import {
   Settings,
   LogOut,
   Menu,
+  Mail,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -240,8 +241,10 @@ export default function DashboardPage() {
   const { data: user, loading: userLoading } = useUser();
   const {
     subscriptionTier,
+    emailConnected,
     loading: subscriptionLoading,
   } = useSubscription();
+  const [connectingGmail, setConnectingGmail] = useState(false);
   const queryClient = useQueryClient();
   const router = useRouter();
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -620,6 +623,26 @@ export default function DashboardPage() {
     }
   };
   
+  const handleConnectGmail = async () => {
+    try {
+      setConnectingGmail(true);
+      const { data } = await axios.get("/api/auth/google/connect");
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (err) {
+      console.error("Failed to connect Gmail:", err);
+      addToast({
+        type: "error",
+        title: "Connection Failed",
+        message: "Failed to initiate Gmail connection. Please try again.",
+        duration: 5000,
+      });
+    } finally {
+      setConnectingGmail(false);
+    }
+  };
+
   const resetFilters = () => {
     setFilters({
       dateRange: "all",
@@ -779,6 +802,20 @@ export default function DashboardPage() {
                 <Plus size={18} />
                 Upload Receipt
               </Link>
+              {subscriptionTier === "premium" && (
+                <button
+                  onClick={handleConnectGmail}
+                  disabled={connectingGmail || emailConnected}
+                  className={`flex items-center gap-2 px-4 py-2 ${
+                    emailConnected 
+                      ? "bg-green-50 text-green-700 border border-green-200 cursor-default" 
+                      : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                  } font-medium rounded-2xl transition-colors text-base`}
+                >
+                  <Mail size={18} className={emailConnected ? "text-green-500" : "text-[#DB4437]"} />
+                  {emailConnected ? "Gmail Connected" : connectingGmail ? "Connecting..." : "Connect Gmail"}
+                </button>
+              )}
               <Link
                 href="/account/logout"
                 className="flex items-center gap-2 text-gray-600 hover:text-gray-800 font-medium text-base"
@@ -840,6 +877,23 @@ export default function DashboardPage() {
                   <Plus size={20} />
                   Upload Receipt
                 </Link>
+                {subscriptionTier === "premium" && (
+                  <button
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      handleConnectGmail();
+                    }}
+                    disabled={connectingGmail || emailConnected}
+                    className={`flex items-center gap-3 px-4 py-3 w-full ${
+                      emailConnected 
+                        ? "bg-green-50 text-green-700 border border-green-200 cursor-default" 
+                        : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+                    } font-medium rounded-lg transition-colors`}
+                  >
+                    <Mail size={20} className={emailConnected ? "text-green-500" : "text-[#DB4437]"} />
+                    {emailConnected ? "Gmail Connected" : connectingGmail ? "Connecting..." : "Connect Gmail"}
+                  </button>
+                )}
                 <Link
                   href="/account/logout"
                   onClick={() => setMobileMenuOpen(false)}

@@ -88,17 +88,22 @@ class UpstashRateLimit {
 
   async check(key: string, windowMs: number, max: number): Promise<RateLimitResult> {
     try {
-      const response = await fetch(`${this.baseUrl}/get/${key}`, {
+      // Use the standard array command format for Upstash REST API
+      const response = await fetch(`${this.baseUrl}`, {
+        method: "POST",
         headers: {
           Authorization: `Bearer ${this.token}`,
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify(["GET", key]),
       });
 
       if (!response.ok) {
         throw new Error(`Upstash request failed: ${response.status}`);
       }
 
-      const data = await response.json();
+      const { result } = await response.json();
+      const data = result ? JSON.parse(result) as RateLimitEntry : null;
       const now = Date.now();
       const resetTime = now + windowMs;
 
@@ -141,19 +146,33 @@ class UpstashRateLimit {
   }
 
   private async setKey(key: string, value: RateLimitEntry, ttlMs: number) {
-    const response = await fetch(`${this.baseUrl}/set/${key}`, {
+    const body = JSON.stringify([
+      "SET",
+      key,
+      JSON.stringify(value),
+      "PX",
+      ttlMs,
+    ]);
+
+    // Safety check: Upstash has a 1MB/10MB limit depending on tier. 
+    // Rate limit data should be < 1KB. If it's > 1MB, something is very wrong.
+    if (body.length > 1024 * 1024) {
+      console.warn(`[RateLimit] Aborting large SET request (${body.length} bytes) for key: ${key.substring(0, 100)}...`);
+      return;
+    }
+
+    const response = await fetch(`${this.baseUrl}`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        value: JSON.stringify(value),
-        ex: Math.ceil(ttlMs / 1000), // Convert to seconds
-      }),
+      body,
     });
 
     if (!response.ok) {
+      const errText = await response.text();
+      console.error(`Upstash set failed: ${response.status} - ${errText}`);
       throw new Error(`Upstash set failed: ${response.status}`);
     }
   }
