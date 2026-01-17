@@ -18,7 +18,7 @@ cloudinary.config({
 export const runtime = "nodejs";
 export const maxDuration = 300; // 5 minutes
 
-export async function GET(req: NextRequest) {
+async function handler(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
   if (process.env.NODE_ENV === "production" && authHeader !== `Bearer ${process.env.QSTASH_TOKEN}`) {
     // return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -58,6 +58,14 @@ export async function GET(req: NextRequest) {
     console.error("Cron job error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
+}
+
+export async function GET(req: NextRequest) {
+  return handler(req);
+}
+
+export async function POST(req: NextRequest) {
+  return handler(req);
 }
 
 async function processUserEmails(user: any) {
