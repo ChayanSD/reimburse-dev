@@ -57,6 +57,7 @@ interface User {
   last_name?: string;
   name?: string;
   is_admin?: boolean;
+  role?: "ADMIN" | "USER";
 }
 
 interface AxiosError {
@@ -792,7 +793,7 @@ export default function DashboardPage() {
                   Teams
                 </Link>
               )}
-              {(user as User)?.is_admin && (
+              {((user as User)?.role === "ADMIN" || (user as User)?.is_admin) && (
                 <Link
                   href="/admin"
                   className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 text-amber-700 hover:from-amber-100 hover:to-orange-100 font-semibold rounded-2xl transition-all shadow-sm hover:shadow text-base group"
@@ -865,7 +866,7 @@ export default function DashboardPage() {
                   <Settings size={20} />
                   Company Settings
                 </Link>
-                {(user as User)?.is_admin && (
+                {((user as User)?.role === "ADMIN" || (user as User)?.is_admin) && (
                   <Link
                     href="/admin"
                     onClick={() => setMobileMenuOpen(false)}
