@@ -12,7 +12,9 @@ import { RecentSales } from "./components/RecentSales";
 import { ActivityLog } from "./components/ActivityLog";
 import { DateRangeFilter } from "./components/DateRangeFilter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, CreditCard, Activity, DollarSign, FileText, AlertCircle } from "lucide-react";
+import { Users, CreditCard, Activity, DollarSign, FileText, AlertCircle, LayoutDashboard, ExternalLink } from "lucide-react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
   title: "Admin Dashboard",
@@ -47,9 +49,18 @@ export default async function AdminPage({
 
   return (
     <div className="flex-1 space-y-4 p-8 pt-6">
-      <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight text-gray-900">Admin Dashboard</h2>
+          <p className="text-muted-foreground">Manage your application and view system statistics.</p>
+        </div>
         <div className="flex items-center space-x-2">
+          <Link href="/dashboard">
+            <Button variant="outline" className="flex items-center gap-2 border-gray-200 hover:bg-gray-50 text-gray-700">
+              <LayoutDashboard className="h-4 w-4" />
+              User Dashboard
+            </Button>
+          </Link>
           <DateRangeFilter />
         </div>
       </div>

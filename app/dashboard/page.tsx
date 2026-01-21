@@ -23,6 +23,7 @@ import {
   Menu,
   Mail,
   Users,
+  Shield,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -794,9 +795,10 @@ export default function DashboardPage() {
               {(user as User)?.is_admin && (
                 <Link
                   href="/admin"
-                  className="text-gray-600 hover:text-gray-800 font-medium text-base"
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 text-amber-700 hover:from-amber-100 hover:to-orange-100 font-semibold rounded-2xl transition-all shadow-sm hover:shadow text-base group"
                 >
-                  Admin
+                  <Shield size={18} className="text-amber-600 group-hover:scale-110 transition-transform" />
+                  Admin Panel
                 </Link>
               )}
               <Link
@@ -867,9 +869,10 @@ export default function DashboardPage() {
                   <Link
                     href="/admin"
                     onClick={() => setMobileMenuOpen(false)}
-                    className="block px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-gray-900 font-medium rounded-lg transition-colors"
+                    className="flex items-center gap-3 px-4 py-3 bg-amber-50 text-amber-700 hover:bg-amber-100 font-bold rounded-lg transition-colors border border-amber-200"
                   >
-                    Admin
+                    <Shield size={20} className="text-amber-600" />
+                    Admin Panel
                   </Link>
                 )}
                 <Link
