@@ -3,6 +3,7 @@
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 
 // Types for our chart data
 export interface ChartData {
@@ -293,3 +294,124 @@ export async function getActivityLogs() {
         }
     });
 }
+
+
+export async function getAllUsers(page: number = 1, limit: number = 10, search: string = "") {
+  await checkAdminAccess();
+  const skip = (page - 1) * limit;
+
+  const where: any = {};
+  if (search) {
+    where.OR = [
+      { email: { contains: search, mode: 'insensitive' } },
+      { firstName: { contains: search, mode: 'insensitive' } },
+      { lastName: { contains: search, mode: 'insensitive' } }
+    ];
+  }
+
+  const [users, total] = await Promise.all([
+    prisma.authUser.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        subscriptionTier: true,
+        subscriptionStatus: true,
+        createdAt: true,
+      }
+    }),
+    prisma.authUser.count({ where })
+  ]);
+
+  return { users, total, pages: Math.ceil(total / limit) };
+}
+
+export async function updateUserSubscription(userId: number, tier: string) {
+  await checkAdminAccess();
+  await prisma.authUser.update({
+    where: { id: userId },
+    data: { subscriptionTier: tier }
+  });
+  revalidatePath("/admin");
+}
+
+export async function deleteUser(userId: number) {
+  await checkAdminAccess();
+  await prisma.authUser.delete({ where: { id: userId } });
+  revalidatePath("/admin");
+}
+
+export async function toggleBanUser(userId: number) {
+  await checkAdminAccess();
+  const user = await prisma.authUser.findUnique({ where: { id: userId } });
+  if (!user) return;
+
+  const newStatus = user.subscriptionStatus === 'banned' ? 'incomplete' : 'banned';
+  await prisma.authUser.update({
+    where: { id: userId },
+    data: { subscriptionStatus: newStatus }
+  });
+  revalidatePath("/admin");
+}
+
+export async function getDetailedRevenue() {
+  await checkAdminAccess();
+
+  // Subscription Revenue Estimate
+  const tiers = await prisma.subscriptionTier.findMany();
+  // If no tiers in DB, use hardcoded estimates
+  const proUsers = await prisma.authUser.count({ where: { subscriptionTier: "pro" } });
+  const premiumUsers = await prisma.authUser.count({ where: { subscriptionTier: "premium" } });
+  
+  // Calculate based on tiers if available, else usage default
+  // Assuming 'pro' -> $10, 'premium' -> $20
+  const monthlySubscriptionRevenue = (proUsers * 10) + (premiumUsers * 20);
+
+  // Onetime Export Fees
+  const paidExports = await prisma.batchSession.findMany({
+    where: {
+      status: 'completed',
+      paidAt: { not: null }
+    }
+  });
+  
+  const exportRevenue = paidExports.length * 4; // $4 per export
+
+  return {
+    subscriptionRevenue: monthlySubscriptionRevenue,
+    exportRevenue,
+    totalRevenue: monthlySubscriptionRevenue + exportRevenue,
+    exportCount: paidExports.length,
+    proCount: proUsers,
+    premiumCount: premiumUsers
+  };
+}
+
+export async function getAllActivityLogs(page: number = 1, limit: number = 20) {
+  await checkAdminAccess();
+  const skip = (page - 1) * limit;
+
+  const [logs, total] = await Promise.all([
+    prisma.auditLog.findMany({
+      skip,
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        user: {
+          select: { email: true }
+        }
+      }
+    }),
+    prisma.auditLog.count()
+  ]);
+
+  return { logs, total, pages: Math.ceil(total / limit) };
+}
+
+

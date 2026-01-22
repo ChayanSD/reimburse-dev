@@ -5,16 +5,23 @@ import {
   getDashboardStats, 
   getUserGrowthData, 
   getRecentSignups, 
-  getActivityLogs 
+  getActivityLogs,
+  getAllUsers,
+  getDetailedRevenue,
+  getAllActivityLogs
 } from "./actions";
 import { Overview } from "./components/Overview";
 import { RecentSales } from "./components/RecentSales";
 import { ActivityLog } from "./components/ActivityLog";
 import { DateRangeFilter } from "./components/DateRangeFilter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, CreditCard, Activity, DollarSign, FileText, AlertCircle, LayoutDashboard, ExternalLink } from "lucide-react";
+import { Users, CreditCard, DollarSign, FileText, LayoutDashboard } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { AdminTabs } from "./components/AdminTabs";
+import { UsersTable } from "./components/UsersTable";
+import { DetailedRevenue } from "./components/DetailedRevenue";
+import { ActivityTable } from "./components/ActivityTable";
 
 export const metadata: Metadata = {
   title: "Admin Dashboard",
@@ -30,22 +37,9 @@ export default async function AdminPage({
   
   const params = await searchParams;
   const days = typeof params.days === "string" ? parseInt(params.days) : 30;
-
-  // Parallel data fetching
-  const [stats, userGrowth, recentSignups, activityLogs] = await Promise.all([
-    getDashboardStats(days),
-    getUserGrowthData(days),
-    getRecentSignups(),
-    getActivityLogs()
-  ]);
-
-  // Convert recentSignups to match RecentSales props
-  const formattedRecentUsers = recentSignups.map(u => ({
-    id: u.id,
-    name: (u.firstName && u.lastName) ? `${u.firstName} ${u.lastName}` : (u.firstName || u.lastName || "User"),
-    email: u.email,
-    subscriptionTier: u.subscriptionTier
-  }));
+  const tab = typeof params.tab === "string" ? params.tab : "overview";
+  const page = typeof params.page === "string" ? parseInt(params.page) : 1;
+  const search = typeof params.search === "string" ? params.search : "";
 
   return (
     <div className="flex-1 space-y-4 p-8 pt-6">
@@ -61,10 +55,39 @@ export default async function AdminPage({
               User Dashboard
             </Button>
           </Link>
-          <DateRangeFilter />
+          {tab === 'overview' && <DateRangeFilter />}
         </div>
       </div>
+
+      <AdminTabs />
       
+      {tab === 'overview' && await OverviewTab({ days })}
+      {tab === 'users' && await UsersTab({ page, search })}
+      {tab === 'revenue' && await RevenueTab()}
+      {tab === 'activity' && await ActivityTab({ page })}
+
+    </div>
+  );
+}
+
+// Sub-components for Server Side Rendering cleanly
+async function OverviewTab({ days }: { days: number }) {
+  const [stats, userGrowth, recentSignups, activityLogs] = await Promise.all([
+    getDashboardStats(days),
+    getUserGrowthData(days),
+    getRecentSignups(),
+    getActivityLogs()
+  ]);
+
+  const formattedRecentUsers = recentSignups.map((u: any) => ({
+    id: u.id,
+    name: (u.firstName && u.lastName) ? `${u.firstName} ${u.lastName}` : (u.firstName || u.lastName || "User"),
+    email: u.email,
+    subscriptionTier: u.subscriptionTier
+  }));
+
+  return (
+    <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -168,5 +191,34 @@ export default async function AdminPage({
         </Card>
       </div>
     </div>
+  );
+}
+
+async function UsersTab({ page, search }: { page: number, search: string }) {
+  const data = await getAllUsers(page, 10, search);
+  return (
+    <UsersTable 
+      users={data.users} 
+      total={data.total} 
+      pages={data.pages} 
+      currentPage={page} 
+    />
+  );
+}
+
+async function RevenueTab() {
+  const data = await getDetailedRevenue();
+  return <DetailedRevenue data={data} />;
+}
+
+async function ActivityTab({ page }: { page: number }) {
+  const data = await getAllActivityLogs(page, 20);
+  return (
+    <ActivityTable 
+       logs={data.logs}
+       total={data.total}
+       pages={data.pages}
+       currentPage={page}
+    />
   );
 }
