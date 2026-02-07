@@ -22,8 +22,14 @@ export async function sendProcessingCompleteEmail(
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="color-scheme" content="light">
+        <meta name="supported-color-schemes" content="light">
         <title>Receipt Processing Complete</title>
         <style>
+          :root {
+            color-scheme: light;
+            supported-color-schemes: light;
+          }
           * {
             margin: 0;
             padding: 0;
@@ -210,6 +216,23 @@ export async function sendProcessingCompleteEmail(
               padding: 20px;
             }
           }
+          @media (prefers-color-scheme: dark) {
+            .receipt-card {
+              background: #ffffff !important;
+              border-color: #e5e7eb !important;
+            }
+            .detail-label {
+              color: #6b7280 !important;
+            }
+            .detail-value {
+              color: #111827 !important;
+            }
+            .amount-highlight {
+              background: none !important;
+              color: #4c1d95 !important;
+              -webkit-text-fill-color: #4c1d95 !important;
+            }
+          }
         </style>
       </head>
       <body>
@@ -322,8 +345,14 @@ export async function sendBatchProcessingCompleteEmail(emailData: {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="color-scheme" content="light">
+        <meta name="supported-color-schemes" content="light">
         <title>Batch Processing Complete</title>
         <style>
+          :root {
+            color-scheme: light;
+            supported-color-schemes: light;
+          }
           * {
             margin: 0;
             padding: 0;
@@ -505,6 +534,23 @@ export async function sendBatchProcessingCompleteEmail(emailData: {
             }
             .stats-card {
               padding: 20px;
+            }
+          }
+          @media (prefers-color-scheme: dark) {
+            .stats-card {
+              background: #ffffff !important;
+              border-color: #e5e7eb !important;
+            }
+            .stat-label {
+              color: #6b7280 !important;
+            }
+            .stat-value {
+              color: #111827 !important;
+            }
+            .count-highlight {
+              background: none !important;
+              color: #4c1d95 !important;
+              -webkit-text-fill-color: #4c1d95 !important;
             }
           }
         </style>
