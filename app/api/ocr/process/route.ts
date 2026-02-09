@@ -52,7 +52,7 @@ async function handler(request: NextRequest): Promise<NextResponse> {
 
     // Extract data using AI with timeout protection
     const extractedData = await Promise.race<ExtractedData>([
-      aiOCRExtraction(file_url, filename),
+      aiOCRExtraction(file_url, filename, userId),
       new Promise<ExtractedData>((_, reject) =>
         setTimeout(() => reject(new Error("OCR timeout after 100 seconds")), 100 * 1000)
       ),
@@ -110,7 +110,7 @@ async function handler(request: NextRequest): Promise<NextResponse> {
     // Calculate confidence score
     const confidence =
       extractedData.confidence === "high" ? 0.9 :
-      extractedData.confidence === "medium" ? 0.7 : 0.5;
+        extractedData.confidence === "medium" ? 0.7 : 0.5;
 
     // Update receipt in database
     await prisma.receipt.update({
@@ -155,9 +155,8 @@ async function handler(request: NextRequest): Promise<NextResponse> {
           where: { id: receiptId },
           data: {
             status: "failed",
-            note: `Processing failed: ${
-              error instanceof Error ? error.message : "Unknown error"
-            }`,
+            note: `Processing failed: ${error instanceof Error ? error.message : "Unknown error"
+              }`,
             updatedAt: new Date(),
           },
         });

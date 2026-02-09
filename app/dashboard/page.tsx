@@ -7,6 +7,7 @@ import useUser from "@/utils/useUser";
 import useSubscription from "@/lib/hooks/useSubscription";
 import { getCurrencySymbol } from "@/lib/utils";
 import {
+  User,
   Receipt,
   Upload,
   FileText,
@@ -48,6 +49,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
+import { CategoryCarousel } from "@/components/dashboard/CategoryCarousel";
 
 // Types
 interface User {
@@ -187,7 +189,7 @@ const generateReport = async (reportData: ReportData): Promise<ReportResponse> =
 const getUserDisplayName = (user: User | null): string => {
   if (!user) return "";
 
-return user.name || "";
+  return user.name || "";
 };
 
 // Toast notification component
@@ -256,7 +258,7 @@ export default function DashboardPage() {
     const id = Math.random().toString(36).substr(2, 9);
     const newToast = { ...toast, id };
     setToasts(prev => [...prev, newToast]);
-    
+
     // Auto remove after duration
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
@@ -344,7 +346,16 @@ export default function DashboardPage() {
     queryFn: fetchBatchSessions,
     enabled: !!user,
   });
-  
+
+  const { data: userCategories = [] } = useQuery({
+    queryKey: ["user-categories"],
+    queryFn: async () => {
+      const response = await axios.get("/api/categories");
+      return response.data.categories;
+    },
+    enabled: !!user,
+  });
+
   const deleteMutation = useMutation({
     mutationFn: deleteReceipt,
     onSuccess: () => {
@@ -381,7 +392,7 @@ export default function DashboardPage() {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        
+
         addToast({
           type: 'success',
           title: 'Report Generated',
@@ -391,7 +402,7 @@ export default function DashboardPage() {
       } else {
         // Should not happen with synchronous generation unless error
         console.error("No download URL returned", data);
-         addToast({
+        addToast({
           type: 'error',
           title: 'Generation Failed',
           message: 'Report generation completed but no file was returned.',
@@ -401,14 +412,14 @@ export default function DashboardPage() {
     },
     onError: (error: unknown) => {
       console.error("Error generating report:", error);
-      
+
       // Type guard for axios error
       const axiosError = error as AxiosError;
-      
+
       // Check if it's a subscription limit error
       if (axiosError.response?.data?.code === 'SUBSCRIPTION_LIMIT_REACHED') {
         const errorData = axiosError.response.data;
-        
+
         // Show toast notification
         addToast({
           type: 'warning',
@@ -416,16 +427,16 @@ export default function DashboardPage() {
           message: errorData.error || 'You have reached your report generation limit.',
           duration: 6000,
         });
-        
+
         // Redirect to plans page after a short delay
         setTimeout(() => {
           router.push('/plans');
         }, 2000);
-        
+
         currentReportDataRef.current = null;
         return;
       }
-      
+
       // Handle errors
       addToast({
         type: 'error',
@@ -433,7 +444,7 @@ export default function DashboardPage() {
         message: axiosError.response?.data?.error || 'Failed to generate report. Please try again.',
         duration: 5000,
       });
-      
+
       // Clear stored report data
       currentReportDataRef.current = null;
     },
@@ -505,7 +516,7 @@ export default function DashboardPage() {
     const receiptInfo = receipt
       ? `${receipt.merchant_name || "Unknown Merchant"} - ${getCurrencySymbol(receipt.currency || "USD")}${parseFloat(String(receipt.amount) || "0").toFixed(2)}`
       : "this receipt";
-    
+
     setDeleteModal({
       open: true,
       receiptId,
@@ -599,7 +610,7 @@ export default function DashboardPage() {
       }, {
         responseType: 'blob',
       });
-  
+
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
@@ -608,7 +619,7 @@ export default function DashboardPage() {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-  
+
       addToast({
         type: 'success',
         title: 'Download Started',
@@ -625,7 +636,7 @@ export default function DashboardPage() {
       });
     }
   };
-  
+
   const handleConnectGmail = async () => {
     try {
       setConnectingGmail(true);
@@ -673,20 +684,20 @@ export default function DashboardPage() {
   if (userLoading) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/80 backdrop-blur-md transition-all duration-300">
-      <div className="relative flex flex-col items-center gap-4">
-        <div className="absolute inset-0 size-20 rounded-full  animate-pulse" />
-        <Spinner className="relative z-10 size-12 text-primary animate-[spin_3s_linear_infinite]" />
-        
-        <div className="flex flex-col items-center gap-1">
-          <h3 className="text-sm font-semibold tracking-widest text-gray-900 uppercase">
-            Loading
-          </h3>
-          <p className="text-xs text-gray-500 animate-pulse">
-            Please wait a moment...
-          </p>
+        <div className="relative flex flex-col items-center gap-4">
+          <div className="absolute inset-0 size-20 rounded-full  animate-pulse" />
+          <Spinner className="relative z-10 size-12 text-primary animate-[spin_3s_linear_infinite]" />
+
+          <div className="flex flex-col items-center gap-1">
+            <h3 className="text-sm font-semibold tracking-widest text-gray-900 uppercase">
+              Loading
+            </h3>
+            <p className="text-xs text-gray-500 animate-pulse">
+              Please wait a moment...
+            </p>
+          </div>
         </div>
       </div>
-    </div>
     );
   }
 
@@ -776,6 +787,16 @@ export default function DashboardPage() {
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center space-x-4 shrink-0">
               <Link
+                href="/profile"
+                className="flex items-center gap-2 text-gray-600 hover:text-gray-800 font-medium text-base"
+                title="Profile"
+              >
+                <div className="w-8 h-8 bg-[#2E86DE]/10 rounded-full flex items-center justify-center">
+                  <User size={18} className="text-[#2E86DE]" />
+                </div>
+                Profile
+              </Link>
+              <Link
                 href="/company-settings"
                 className="flex items-center gap-2 text-gray-600 hover:text-gray-800 font-medium text-base"
                 title="Company Settings"
@@ -820,11 +841,10 @@ export default function DashboardPage() {
                 <button
                   onClick={handleConnectGmail}
                   disabled={connectingGmail || emailConnected}
-                  className={`flex items-center gap-2 px-4 py-2 ${
-                    emailConnected 
-                      ? "bg-green-50 text-green-700 border border-green-200 cursor-default" 
-                      : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
-                  } font-medium rounded-2xl transition-colors text-base`}
+                  className={`flex items-center gap-2 px-4 py-2 ${emailConnected
+                    ? "bg-green-50 text-green-700 border border-green-200 cursor-default"
+                    : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                    } font-medium rounded-2xl transition-colors text-base`}
                 >
                   <Mail size={18} className={emailConnected ? "text-green-500" : "text-[#DB4437]"} />
                   {emailConnected ? "Gmail Connected" : connectingGmail ? "Connecting..." : "Connect Gmail"}
@@ -858,6 +878,16 @@ export default function DashboardPage() {
           {mobileMenuOpen && (
             <div ref={mobileMenuRef} className="md:hidden absolute top-full left-0 right-0 bg-white border-b border-gray-200 shadow-lg z-50">
               <div className="px-4 py-3 space-y-2">
+                <Link
+                  href="/profile"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-gray-900 font-medium rounded-lg transition-colors"
+                >
+                  <div className="w-10 h-10 bg-[#2E86DE]/10 rounded-full flex items-center justify-center shrink-0">
+                    <User size={20} className="text-[#2E86DE]" />
+                  </div>
+                  My Profile
+                </Link>
                 <Link
                   href="/company-settings"
                   onClick={() => setMobileMenuOpen(false)}
@@ -909,11 +939,10 @@ export default function DashboardPage() {
                       handleConnectGmail();
                     }}
                     disabled={connectingGmail || emailConnected}
-                    className={`flex items-center gap-3 px-4 py-3 w-full ${
-                      emailConnected 
-                        ? "bg-green-50 text-green-700 border border-green-200 cursor-default" 
-                        : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
-                    } font-medium rounded-lg transition-colors`}
+                    className={`flex items-center gap-3 px-4 py-3 w-full ${emailConnected
+                      ? "bg-green-50 text-green-700 border border-green-200 cursor-default"
+                      : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+                      } font-medium rounded-lg transition-colors`}
                   >
                     <Mail size={20} className={emailConnected ? "text-green-500" : "text-[#DB4437]"} />
                     {emailConnected ? "Gmail Connected" : connectingGmail ? "Connecting..." : "Connect Gmail"}
@@ -1010,14 +1039,13 @@ export default function DashboardPage() {
                   Subscription
                 </h3>
                 <div
-                  className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
-                    subscriptionTier === "pro" || subscriptionTier === "premium"
-                      ? "bg-yellow-100"
-                      : "bg-gray-100"
-                  }`}
+                  className={`w-10 h-10 rounded-2xl flex items-center justify-center ${subscriptionTier === "pro" || subscriptionTier === "premium"
+                    ? "bg-yellow-100"
+                    : "bg-gray-100"
+                    }`}
                 >
                   {subscriptionTier === "pro" ||
-                  subscriptionTier === "premium" ? (
+                    subscriptionTier === "premium" ? (
                     <Crown size={20} className="text-yellow-600" />
                   ) : (
                     <Receipt size={20} className="text-gray-600" />
@@ -1034,10 +1062,10 @@ export default function DashboardPage() {
                 </p>
                 {(subscriptionTier === "pro" ||
                   subscriptionTier === "premium") && (
-                  <div className="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-lg">
-                    Active
-                  </div>
-                )}
+                    <div className="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-lg">
+                      Active
+                    </div>
+                  )}
               </div>
               <Link
                 href="/pricing"
@@ -1048,12 +1076,21 @@ export default function DashboardPage() {
             </div>
           </div>
 
-         {/* Purchased Exports */}
-         {batchSessions.length > 0 && (
-           <div className="bg-white rounded-3xl p-6 border border-gray-200 mb-6">
-             <h2 className="text-xl font-semibold text-gray-900 mb-4">Purchased Exports</h2>
-             <div className="space-y-4">
-               {batchSessions.map((batchSession) => (
+
+          {/* User Categories Carousel */}
+          <div className="mb-8">
+            <CategoryCarousel
+              onSelect={(category) => setFilters(prev => ({ ...prev, category }))}
+              selectedCategory={filters.category}
+            />
+          </div>
+
+          {/* Purchased Exports */}
+          {batchSessions.length > 0 && (
+            <div className="bg-white rounded-3xl p-6 border border-gray-200 mb-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Purchased Exports</h2>
+              <div className="space-y-4">
+                {batchSessions.map((batchSession) => (
                   <div key={batchSession.sessionId} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-gray-50 rounded-xl gap-4">
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-gray-900 break-all sm:truncate">Batch Export - {batchSession.sessionId}</p>
@@ -1078,12 +1115,12 @@ export default function DashboardPage() {
                       </button>
                     </div>
                   </div>
-               ))}
-             </div>
-           </div>
-         )}
-         
-         
+                ))}
+              </div>
+            </div>
+          )}
+
+
           {/* One-time Export Promotion for Free Users */}
           {subscriptionTier === "free" && (
             <div className="relative mb-6 overflow-hidden rounded-[32px] p-0.5 border border-white/20 shadow-xl">
@@ -1110,8 +1147,8 @@ export default function DashboardPage() {
                     <div className="text-[10px] text-gray-500 font-medium">ONE-TIME</div>
                   </div>
                   <div className="w-px h-8 bg-gray-200"></div>
-                  <Link 
-                    href="/batch-upload" 
+                  <Link
+                    href="/batch-upload"
                     className="px-6 py-2 bg-[#2E86DE] hover:bg-[#2574C7] text-white text-sm font-bold rounded-xl shadow-lg transition-all hover:scale-[1.02]"
                   >
                     Get Started
@@ -1213,6 +1250,11 @@ export default function DashboardPage() {
                     <SelectItem value="Travel" className="text-sm">Travel</SelectItem>
                     <SelectItem value="Supplies" className="text-sm">Supplies</SelectItem>
                     <SelectItem value="Other" className="text-sm">Other</SelectItem>
+                    {userCategories.map((cat: any) => (
+                      <SelectItem key={cat.id} value={cat.title} className="text-sm">
+                        {cat.title}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -1313,34 +1355,34 @@ export default function DashboardPage() {
             {(filters.dateRange !== "all" ||
               filters.category !== "all" ||
               filters.merchant.trim()) && (
-              <div className="mt-4 p-3 bg-blue-50 rounded-xl border border-blue-200">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm text-blue-800">
-                    <span className="font-medium">Active filters:</span>
-                    {filters.dateRange !== "all" && (
-                      <span className="ml-2 px-2 py-1 bg-blue-100 rounded-lg">
-                        {filters.dateRange === "custom"
-                          ? "Custom dates"
-                          : filters.dateRange.replace("_", " ")}
-                      </span>
-                    )}
-                    {filters.category !== "all" && (
-                      <span className="ml-2 px-2 py-1 bg-blue-100 rounded-lg">
-                        {filters.category}
-                      </span>
-                    )}
-                    {filters.merchant.trim() && (
-                      <span className="ml-2 px-2 py-1 bg-blue-100 rounded-lg">
-                        &ldquo;{filters.merchant}&rdquo;
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-sm text-blue-600 font-medium">
-                    {receipts.length} receipts found
+                <div className="mt-4 p-3 bg-blue-50 rounded-xl border border-blue-200">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm text-blue-800">
+                      <span className="font-medium">Active filters:</span>
+                      {filters.dateRange !== "all" && (
+                        <span className="ml-2 px-2 py-1 bg-blue-100 rounded-lg">
+                          {filters.dateRange === "custom"
+                            ? "Custom dates"
+                            : filters.dateRange.replace("_", " ")}
+                        </span>
+                      )}
+                      {filters.category !== "all" && (
+                        <span className="ml-2 px-2 py-1 bg-blue-100 rounded-lg">
+                          {filters.category}
+                        </span>
+                      )}
+                      {filters.merchant.trim() && (
+                        <span className="ml-2 px-2 py-1 bg-blue-100 rounded-lg">
+                          &ldquo;{filters.merchant}&rdquo;
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm text-blue-600 font-medium">
+                      {receipts.length} receipts found
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
           </div>
 
           {/* Receipts Table */}
@@ -1360,10 +1402,10 @@ export default function DashboardPage() {
                             receipts.length === 0
                               ? false
                               : selectedReceipts.length === receipts.length
-                              ? true
-                              : selectedReceipts.length > 0
-                              ? "indeterminate"
-                              : false
+                                ? true
+                                : selectedReceipts.length > 0
+                                  ? "indeterminate"
+                                  : false
                           }
                           onCheckedChange={handleSelectAll}
                         />
@@ -1439,10 +1481,10 @@ export default function DashboardPage() {
                             receipts.length === 0
                               ? false
                               : selectedReceipts.length === receipts.length
-                              ? true
-                              : selectedReceipts.length > 0
-                              ? "indeterminate"
-                              : false
+                                ? true
+                                : selectedReceipts.length > 0
+                                  ? "indeterminate"
+                                  : false
                           }
                           onCheckedChange={handleSelectAll}
                         />
@@ -1517,8 +1559,8 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
-        </main>
-      </div>
+        </main >
+      </div >
     </>
   );
 }

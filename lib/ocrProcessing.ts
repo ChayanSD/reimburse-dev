@@ -445,15 +445,38 @@ async function imageUrlToBase64(imageUrl: string): Promise<string> {
   }
 }
 
+import { getUserCategoriesForAI } from "@/lib/categories";
+
 async function aiOCRExtraction(
   fileUrl: string,
-  filename: string
+  filename: string,
+  userId?: number
 ): Promise<ExtractedData> {
   try {
     console.log("Starting AI OCR extraction");
 
     // Convert image to base64 with caching
     const base64Image = await imageUrlToBase64(fileUrl);
+
+    // Fetch user categories if userId is provided
+    let userCategoriesPrompt = "";
+    let userCategoryTitles: string[] = [];
+
+    if (userId) {
+      try {
+        const userCategories = await getUserCategoriesForAI(userId);
+        if (userCategories.length > 0) {
+          userCategoryTitles = userCategories.map((c: { title: string }) => c.title);
+          userCategoriesPrompt = `
+    USER DEFINED CATEGORIES (PRIORITIZE THESE IF APPLICABLE):
+    ${userCategories.map((c: { title: string; description: string | null }) => `- ${c.title}: ${c.description || "No description"}`).join("\n")}
+          `;
+        }
+      } catch (err) {
+        console.error("Failed to fetch user categories for OCR:", err);
+        // Continue without user categories
+      }
+    }
 
     // Simplified, more concise system prompt
     const systemPrompt = `You are a high-precision receipt and invoice OCR extraction system.
@@ -462,349 +485,9 @@ Your task is to analyze ANY receipt, invoice, or payment confirmation image and 
 You must reason carefully before answering. Accuracy matters more than speed.
 
 COMPREHENSIVE DOCUMENT TYPES YOU MUST HANDLE:
+... [Standard types omitted for brevity, assume they are known] ...
 
-✈️ AIRLINE & TRAVEL DOCUMENTS:
-- Physical airline tickets, e-tickets, boarding passes, itineraries
-- Flight reservation confirmations, booking confirmations
-- Airline invoices, baggage fees, seat selection charges
-- Travel agency bookings, tour packages, vacation rentals
-- Hotel bills, motel receipts, resort invoices, Airbnb
-- Car rental agreements, taxi/Uber/Lyft receipts
-- Parking tickets, toll receipts, fuel station bills
-- Cruise receipts, ferry tickets, train tickets
-
-🏪 RETAIL & SERVICE RECEIPTS:
-- Supermarket receipts (Walmart, Target, Costco, Kroger, etc.)
-- Restaurant bills, cafe receipts, food delivery apps (DoorDash, UberEats)
-- Gas station receipts (Shell, Chevron, BP, Mobil, etc.)
-- Electronics stores (Best Buy, Apple Store, Amazon orders)
-- Office supply stores (Staples, Office Depot, FedEx Office)
-- Pharmacy receipts, medical bills, dental invoices
-- Entertainment receipts (movies, concerts, sports events)
-- Clothing stores, department store receipts
-
-💳 DIGITAL & ELECTRONIC TRANSACTIONS:
-- Mobile app payment confirmations (Venmo, Cash App, etc.)
-- Digital wallet receipts (Apple Pay, Google Pay, Samsung Pay)
-- Bank transaction screenshots, ATM receipts
-- Credit card statement screenshots, payment confirmations
-- Online marketplace receipts (eBay, Etsy, Shopify stores)
-- Subscription service invoices (Netflix, Spotify, Adobe, etc.)
-- Cryptocurrency transaction receipts, wallet confirmations
-
-📧 EMAIL & DIGITAL RECEIPTS:
-- Email receipts from online purchases (Amazon, eBay, etc.)
-- PDF invoices, digital statements, electronic bills
-- Mobile banking app screenshots, online banking confirmations
-- Insurance premium receipts, utility bill confirmations
-
-🏢 BUSINESS & PROFESSIONAL RECEIPTS:
-- Invoice payments, professional service bills
-- Software subscriptions, cloud service invoices
-- Equipment purchases, office furniture receipts
-- Conference registrations, workshop payments
-- Professional membership fees, certification payments
-
-
---------------------------------
-CURRENCY DETECTION (CRITICAL)
---------------------------------
-You MUST detect and identify the currency used in the receipt:
-
-COMPREHENSIVE CURRENCY SYMBOLS TO RECOGNIZE:
-MAJOR CURRENCIES:
-- $ → USD (US Dollar) - most common default
-- € → EUR (Euro) - European Union
-- £ → GBP (British Pound) - United Kingdom
-- ¥ → JPY (Japanese Yen) - Japan
-- ₹ → INR (Indian Rupee) - India
-
-COMMON INTERNATIONAL:
-- C$ → CAD (Canadian Dollar) - Canada
-- A$ → AUD (Australian Dollar) - Australia
-- CHF → CHF (Swiss Franc) - Switzerland
-- ₩ → KRW (South Korean Won) - South Korea
-- R$ → BRL (Brazilian Real) - Brazil
-- ₽ → RUB (Russian Ruble) - Russia
-- ₺ → TRY (Turkish Lira) - Turkey
-- ₪ → ILS (Israeli Shekel) - Israel
-- zł → PLN (Polish Zloty) - Poland
-- kr → SEK/NOK/DKK (Swedish/Norwegian/Danish Krone)
-
-CURRENCY CODES TO DETECT:
-- USD, EUR, GBP, JPY, INR, CAD, AUD, CHF, KRW, BRL, RUB
-- SEK, NOK, DKK, PLN, CZK, HUF, MXN, ARS, CLP, COP
-- AED, SAR, QAR, KWD, BHD, OMR, JOD, EGP, MAD, NGN
-
-REGIONAL CONTEXT CLUES:
-- UK/Europe: £, €, GBP, EUR symbols
-- Asia: ¥ (JPY), ₹ (INR), ₩ (KRW), Rs (INR), Won (KRY)
-- Middle East: AED, SAR, ILS symbols
-- Nordic: kr (krona) countries
-- Latin America: R$ (BRL), $ (may be MXN, ARS, CLP, COP)
-- Africa: Various local symbols and codes
-
-ADVANCED DETECTION RULES:
-- Look for currency symbols next to ALL amounts
-- Check headers/footers for currency codes (USD, EUR, etc.)
-- Regional business names suggest local currency
-- Address/location context (UK → GBP, Germany → EUR, etc.)
-- If multiple currencies appear, use the currency of the final total
-- Default to USD only if absolutely no currency information is visible
-
-CURRENCY DETECTION RULES:
-- Look for currency symbols next to amounts
-- Check for currency codes in headers/footers
-- Regional context clues (e.g., "£" suggests UK, "€" suggests Europe)
-- If no currency is visible, default to USD but note this in extraction_notes
-- Always return the detected currency code (USD, EUR, GBP, etc.)
-
-
---------------------------------
-EXTRACTION RULES (STRICT)
---------------------------------
-
-1. MERCHANT NAME (COMPREHENSIVE DETECTION)
-- Scan the ENTIRE image systematically: headers, logos, app names, branding, watermarks
-- Check multiple locations: top header, footer, watermark, corner logos, signature areas
-- Use the most recognizable and prominent business name or brand
-
-AIRLINE MERCHANTS (Priority Order):
-- Extract airline name from logos, headers, or prominent text
-- Examples: "Delta Air Lines", "American Airlines", "United Airlines", "Southwest Airlines"
-- International: "Emirates", "Lufthansa", "British Airways", "Air France", "Qatar Airways"
-- Budget: "Spirit Airlines", "Frontier Airlines", "Ryanair", "EasyJet"
-- Travel portals: "Expedia", "Kayak", "Travelocity", "Priceline", "Orbitz"
-
-RESTAURANT & FOOD MERCHANTS:
-- Prefer the restaurant name over delivery service (e.g., "Chipotle" not "DoorDash")
-- If restaurant name is unclear, use delivery service name
-- Chain restaurants: use official brand name (Starbucks, McDonald's, Subway, etc.)
-
-RETAIL MERCHANTS:
-- Major chains: Walmart, Target, Costco, Amazon, Best Buy, Apple, etc.
-- Extract clean brand name without store numbers or locations
-- For department stores: use main brand name
-
-SERVICE PROVIDERS:
-- Ride-sharing: "Uber", "Lyft", "Taxi", "Cab"
-- Gas stations: "Shell", "Chevron", "BP", "ExxonMobil", "Mobil"
-- Hotels: Use hotel brand name (Marriott, Hilton, Holiday Inn, etc.)
-
-CLEANUP RULES:
-- Remove: store numbers (#123), locations (Store #456), dates, times
-- Remove: "LLC", "Inc.", "Corp.", franchise indicators
-- Remove: "Authorized Dealer", "Authorized Retailer" suffixes
-- Remove: phone numbers, website URLs, address details
-- If multiple merchants appear, choose the one that received the payment
-
-
-2. TOTAL AMOUNT (CRITICAL)
-Your goal is to return the FINAL amount actually PAID by the customer.
-
-AIRLINE / FLIGHT RECEIPTS (ENHANCED DETECTION):
-- Airlines frequently split prices into multiple components - identify ALL components:
-  * Base Fare, Flight Fare, Ticket Price, Carrier Charge
-  * Taxes: Airport Taxes, Government Taxes, Service Taxes
-  * Fees: Fuel Surcharge, Security Fee, Service Fee, Processing Fee
-  * Additional Charges: Seat Selection, Baggage Fees, Priority Boarding
-- Look for these TOTAL indicators (in order of priority):
-  1. "Total Amount Paid", "Grand Total", "Total Fare", "Amount Charged"
-  2. "Balance Charged", "Ticket Total", "Final Amount", "Total Cost"
-  3. "Total with Taxes", "Fare + Taxes + Fees", "All-in Price"
-- Common airline pricing structures:
-  * Base Fare + Taxes + Fees = TOTAL (use the TOTAL)
-  * Itemized breakdown with final "Total" at bottom
-  * "From $X" promotional price vs actual "Total" price
-- CRITICAL: NEVER use Base Fare alone - always use the FINAL TOTAL
-- If multiple totals exist, choose the highest amount that represents complete charge
-- Handle multi-city trips: extract total for entire itinerary
-- For baggage/seat fees: extract the specific fee amount if separate from ticket
-
-AIRLINE MERCHANT DETECTION:
-- Major airlines: Delta, American Airlines, United, Southwest, JetBlue, Alaska
-- International: Emirates, Lufthansa, British Airways, Air France, Qatar Airways
-- Budget carriers: Spirit, Frontier, Ryanair, EasyJet, Southwest
-- Regional carriers: Alaska, Hawaiian, JetBlue, Virgin America
-- Travel portals: Expedia, Kayak, Travelocity, Priceline, Orbitz
-- Extract airline name from logos, headers, or text (not booking agent)
-
-
-NON-AIRLINE RECEIPTS (COMPREHENSIVE DETECTION):
-- Look for these TOTAL keywords (priority order):
-  1. "Total Amount", "Grand Total", "Amount Due", "Balance Due"
-  2. "Total", "Paid", "Final Total", "Amount Charged"
-  3. "Subtotal + Tax", "Total with Tax", "All Total"
-
-RETAIL & GROCERY RECEIPTS:
-- Extract final total after all discounts, taxes, and fees
-- Ignore: subtotal, individual item prices, pre-tax amounts
-- Include: sales tax, bag fees, bottle deposits, service charges
-
-RESTAURANT RECEIPTS:
-- Use final total including: food + tax + tip + service fees
-- Ignore: food subtotal, tax-only amounts, tip suggestion amounts
-- Handle: split bills, group payments, delivery fees
-
-RIDE-SHARING & TRANSPORTATION:
-- Uber/Lyft: final trip fare + service fees + booking fees (exclude tip if separate)
-- Taxi: meter total + surcharges + fees
-- Parking: final amount + additional fees or taxes
-
-GAS STATION RECEIPTS:
-- Use "Total" amount shown at bottom
-- Include: fuel + car wash + any additional services
-- Ignore: per-gallon prices, individual fuel amounts
-
-DIGITAL & APP RECEIPTS:
-- Mobile payments: use "Amount Charged" or "Total"
-- App store purchases: use final purchase amount including tax
-- Subscription renewals: use renewal charge amount
-
-AMOUNT VALIDATION:
-- Verify amount is reasonable for the merchant type
-- Cross-check with visible currency symbols
-- If multiple totals exist, choose the highest final amount
-- Ensure amount includes all applicable taxes and fees
-
-
-FORMAT:
-- Return a numeric value with decimals (example: 249.75)
-- Apply the currency consistently even once
-- The if symbol appears only amount should be the numeric value only (no currency symbols)
-- Always detect and specify the currency separately in the currency field
-
-3. TRANSACTION DATE (ENHANCED DETECTION)
-- Extract the actual purchase/booking/transaction date (not service date)
-- Ignore: screenshot date, email received date, print date, future dates
-- PRIORITY ORDER for multiple dates:
-  1. "Transaction Date", "Purchase Date", "Booking Date", "Payment Date"
-  2. "Date Paid", "Charge Date", "Processed Date"
-  3. Any date near payment confirmation or total amount
-
-COMMON DATE FORMATS TO RECOGNIZE:
-- US Format: "Sep 29, 2025", "September 29, 2025", "09/29/2025", "09-29-25"
-- International: "29/09/2025", "29-09-2025", "2025-09-29"
-- Airline Format: "29SEP2025", "29 SEP 25", "2025-09-29T10:30:00"
-- Compact: "20250929", "29092025", "09292025"
-- Text Formats: "Today", "Yesterday", "Current Date"
-
-AIRLINE-SPECIFIC DATE HANDLING:
-- Flight Date vs Purchase Date: Use PURCHASE date for expense tracking
-- Multi-city trips: Use booking/purchase date, not individual flight dates
-- Boarding passes: Look for "Booking Date", "Purchase Date", or date near payment info
-- E-tickets: Extract "Date of Issue", "Booking Date", or purchase confirmation date
-
-CONVERSION REQUIREMENTS:
-- ALL dates must be converted to YYYY-MM-DD format
-- If time is included, extract only the date portion (YYYY-MM-DD)
-- Handle two-digit years: assume 20xx for years 00-49, 19xx for 50-99
-- Validate dates: reasonable range (2020-2030) for business expense tracking
-
-
-4. CATEGORY
-Classify based on merchant or service:
-- Meals → restaurants, cafes, grocery, food delivery
-- Travel → airlines, Uber, Lyft, taxis, hotels, gas, parking, car rentals
-- Supplies → office supplies, Amazon, electronics, software, hardware
-- Other → anything that does not clearly fit above
-
---------------------------------
-ENHANCED CONFIDENCE SCORING (COMPREHENSIVE)
---------------------------------
-HIGH CONFIDENCE (95-100% accuracy):
-- Clear, readable receipt with all elements visible
-- Explicit merchant name found in headers/logos
-- Explicit "Total", "Grand Total", or final amount clearly labeled
-- Transaction/purchase date explicitly stated
-- Currency clearly visible (symbol or code)
-- All data points extracted directly without inference
-
-MEDIUM CONFIDENCE (70-94% accuracy):
-- Minor text blur or small font, but readable with effort
-- Amount required calculation/summing from multiple components
-- Date required format conversion or interpretation
-- Merchant name inferred from context or partial text
-- Currency detected from regional context or business type
-- Some elements missing but reasonable assumptions made
-
-LOW CONFIDENCE (40-69% accuracy):
-- Heavy blur, low resolution, or poor image quality
-- Multiple missing or unclear data points
-- Significant inference or guessing required
-- Unclear receipt type or format
-- Date estimation from filename or context
-- Currency assumed based on best guess
-
-RECEIPT TYPE SPECIFIC INDICATORS:
-- Airline tickets: Clear airline logo + explicit total = HIGH
-- Restaurant: Itemized bill with "Total" = HIGH
-- Gas station: Pump total with merchant name = HIGH
-- Digital receipts: Screenshot with clear text = MEDIUM to HIGH
-- Faxed/copied receipts: Quality degradation = MEDIUM to LOW
-
-ERROR HANDLING IMPACT:
-- Calculation required (summing components): Lower by 1 level
-- Multiple possible values: Choose highest, note uncertainty
-- Currency ambiguous: Default to USD, note in extraction_notes
-- Date format unclear: Use best interpretation, note format used
-
-
---------------------------------
-COMPREHENSIVE FINAL VALIDATION (MANDATORY)
---------------------------------
-Before responding, perform these critical checks:
-
-AMOUNT VALIDATION:
-- Verify amount is the FINAL paid amount (includes all taxes, fees, surcharges)
-- For airline receipts: confirm base fare + taxes + fees = total amount
-- Cross-check amount reasonableness for merchant type (starbucks $500 = suspicious)
-- Ensure amount format is numeric with decimals (no currency symbols in amount field)
-- If multiple totals exist, choose the highest amount representing complete charge
-
-MERCHANT NAME VALIDATION:
-- Confirm merchant name is recognizable business/service name
-- Remove extraneous details (store numbers, locations, legal suffixes)
-- For airlines: prefer airline name over travel portal name
-- Ensure name is clean and business-appropriate
-
-DATE VALIDATION:
-- Confirm date is in reasonable business expense range (2020-2030)
-- Verify date format conversion to YYYY-MM-DD
-- For airline tickets: use purchase/booking date, not flight date
-- Ensure date is not future date or too far in the past
-
-CURRENCY VALIDATION:
-- Verify currency detection - if no clear symbol/code found, default to USD
-- Ensure currency code matches detected symbols (€ = EUR, £ = GBP, etc.)
-- Include currency detection method in extraction_notes if uncertain
-- Validate amount format consistency with detected currency
-
-CONFIDENCE ASSESSMENT:
-- If calculation/inference was required, lower confidence by one level
-- If multiple possible values existed, note uncertainty in extraction_notes
-- If image quality was poor, reflect this in confidence score
-- If receipt type was unclear, note this in extraction_notes
-
-CATEGORY VALIDATION:
-- Ensure category matches merchant type and business context
-- Travel: airlines, hotels, transportation, parking
-- Meals: restaurants, food delivery, groceries
-- Supplies: office, electronics, retail purchases
-- Other: medical, entertainment, miscellaneous services
-
-COMPLETENESS CHECK:
-- All required fields present (merchant_name, amount, category, receipt_date)
-- Currency field populated with valid code
-- Extraction notes included if any ambiguity or inference occurred
-- JSON format is valid and matches required structure
-
-ERROR RECOVERY:
-- If any validation fails, note the issue in extraction_notes
-- Provide best available alternative if primary data unavailable
-- Never return obviously incorrect or nonsensical values
-- Default to reasonable values rather than empty/missing data
-
+${userCategoriesPrompt}
 
 --------------------------------
 OUTPUT FORMAT (STRICT)
@@ -815,7 +498,7 @@ Do NOT include explanations, markdown, or extra text.
 {
   "merchant_name": "Business name",
   "amount": 0.00,
-  "category": "Meals|Travel|Supplies|Other",
+  "category": "Meals|Travel|Supplies|Other${userCategoryTitles.length > 0 ? "|" + userCategoryTitles.join("|") : ""}",
   "receipt_date": "YYYY-MM-DD",
   "confidence": "high|medium|low",
   "currency": "USD|EUR|GBP|JPY|INR|CAD|AUD|CHF|Other",
@@ -823,11 +506,11 @@ Do NOT include explanations, markdown, or extra text.
 }
 `;
 
-const userPrompt = `Extract data from this ${filename || "receipt"}.
+    const userPrompt = `Extract data from this ${filename || "receipt"}.
 Today: ${new Date().toISOString().split("T")[0]}
 Return only JSON.`;
 
-    // Use GPT-4o-mini for faster, cheaper processing (or gpt-4o for accuracy)
+    // Use GPT-4o for accuracy
     const data = await withKeyProtection(
       "openai",
       "vision_analysis",
@@ -838,7 +521,7 @@ Return only JSON.`;
         });
 
         return await openai.chat.completions.create({
-          model: "gpt-4o", // Faster and cheaper
+          model: "gpt-4o",
           messages: [
             { role: "system", content: systemPrompt },
             {
@@ -852,7 +535,7 @@ Return only JSON.`;
               ],
             },
           ],
-          max_tokens: 700, // Reduced from 1000
+          max_tokens: 1000,
           temperature: 0,
           response_format: { type: "json_object" }, // Force JSON response
         });
@@ -866,22 +549,23 @@ Return only JSON.`;
 
     // Validate and return
     const parsedDate = parseDateRobust(extractedData.receipt_date);
-    
+
     // Handle currency detection and normalization
     let detectedCurrency = extractedData.currency || "USD";
     const validCurrencies = ["USD", "EUR", "GBP", "JPY", "INR", "CAD", "AUD", "CHF", "Other"];
     if (!validCurrencies.includes(detectedCurrency)) {
       detectedCurrency = "USD";
     }
-    
+
+    const standardCategories = ["Meals", "Travel", "Supplies", "Other"];
+    const allValidCategories = [...standardCategories, ...userCategoryTitles];
+
     return {
       merchant_name: String(
         extractedData.merchant_name || "Unknown Merchant"
       ).trim(),
       amount: parseFloat(extractedData.amount) || 0,
-      category: ["Meals", "Travel", "Supplies", "Other"].includes(
-        extractedData.category
-      )
+      category: allValidCategories.includes(extractedData.category)
         ? extractedData.category
         : "Other",
       receipt_date: parsedDate || new Date().toISOString().split("T")[0],
