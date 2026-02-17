@@ -108,18 +108,18 @@ export async function sendProcessingCompleteEmail(
             line-height: 1.7;
           }
           .receipt-card {
-            background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+            background-color: #1f2937;
             border-radius: 12px;
             padding: 28px;
             margin: 32px 0;
-            border: 1px solid #e5e7eb;
+            border: 1px solid #374151;
           }
           .detail-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
             padding: 16px 0;
-            border-bottom: 1px solid #e5e7eb;
+            border-bottom: 1px solid #374151;
           }
           .detail-row:last-child {
             border-bottom: none;
@@ -130,22 +130,19 @@ export async function sendProcessingCompleteEmail(
           }
           .detail-label {
             font-weight: 600;
-            color: #6b7280;
+            color: #9ca3af;
             font-size: 14px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
           }
           .detail-value {
-            color: #1f2937;
+            color: #ffffff;
             font-weight: 600;
             font-size: 15px;
             text-align: right;
           }
           .amount-highlight {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            color: #818cf8;
             font-size: 24px;
             font-weight: 700;
           }
@@ -217,20 +214,49 @@ export async function sendProcessingCompleteEmail(
             }
           }
           @media (prefers-color-scheme: dark) {
+            body {
+              background: #111827 !important;
+            }
+            .container {
+              background-color: #1f2937 !important;
+            }
+            .header-title {
+              color: #ffffff !important;
+            }
+            .header-subtitle {
+              color: #d1d5db !important;
+            }
+            .section-title {
+              color: #f3f4f6 !important;
+            }
             .receipt-card {
-              background: #ffffff !important;
-              border-color: #e5e7eb !important;
+              background: #374151 !important;
+              border-color: #4b5563 !important;
             }
             .detail-label {
-              color: #6b7280 !important;
+              color: #9ca3af !important;
             }
             .detail-value {
-              color: #111827 !important;
+              color: #f3f4f6 !important;
             }
             .amount-highlight {
-              background: none !important;
-              color: #4c1d95 !important;
-              -webkit-text-fill-color: #4c1d95 !important;
+              background: linear-gradient(135deg, #818cf8 0%, #c084fc 100%) !important;
+              -webkit-background-clip: text !important;
+              -webkit-text-fill-color: transparent !important;
+              background-clip: text !important;
+            }
+            .intro-text {
+              color: #d1d5db !important;
+            }
+            .info-text {
+              color: #9ca3af !important;
+            }
+            .footer {
+              background-color: #1f2937 !important;
+              border-top: 1px solid #374151 !important;
+            }
+            .footer-text {
+              color: #9ca3af !important;
             }
           }
         </style>
@@ -265,8 +291,8 @@ export async function sendProcessingCompleteEmail(
                 <div class="detail-row">
                   <span class="detail-label">Amount :</span>
                   <span class="detail-value amount-highlight">$${amount.toFixed(
-                    2
-                  )}</span>
+      2
+    )}</span>
                 </div>
                 <div class="detail-row">
                   <span class="detail-label">Category :</span>
@@ -287,9 +313,8 @@ export async function sendProcessingCompleteEmail(
               </p>
               
               <div class="cta-container">
-                <a href="${
-                  process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-                }/dashboard" class="cta-button">
+                <a href="${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+      }/dashboard" class="cta-button">
                   View in Dashboard →
                 </a>
               </div>
@@ -431,18 +456,18 @@ export async function sendBatchProcessingCompleteEmail(emailData: {
             line-height: 1.7;
           }
           .stats-card {
-            background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+            background-color: #1f2937;
             border-radius: 12px;
             padding: 28px;
             margin: 32px 0;
-            border: 1px solid #e5e7eb;
+            border: 1px solid #374151;
           }
           .stat-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
             padding: 16px 0;
-            border-bottom: 1px solid #e5e7eb;
+            border-bottom: 1px solid #374151;
           }
           .stat-row:last-child {
             border-bottom: none;
@@ -450,22 +475,19 @@ export async function sendBatchProcessingCompleteEmail(emailData: {
           }
           .stat-label {
             font-weight: 600;
-            color: #6b7280;
+            color: #9ca3af;
             font-size: 14px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
           }
           .stat-value {
-            color: #1f2937;
+            color: #ffffff;
             font-weight: 600;
             font-size: 15px;
             text-align: right;
           }
           .count-highlight {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            color: #818cf8;
             font-size: 24px;
             font-weight: 700;
           }
@@ -537,20 +559,46 @@ export async function sendBatchProcessingCompleteEmail(emailData: {
             }
           }
           @media (prefers-color-scheme: dark) {
+            body {
+              background: #111827 !important;
+            }
+            .container {
+              background-color: #1f2937 !important;
+            }
+            .header-title {
+              color: #ffffff !important;
+            }
+            .header-subtitle {
+              color: #d1d5db !important;
+            }
             .stats-card {
-              background: #ffffff !important;
-              border-color: #e5e7eb !important;
+              background: #374151 !important;
+              border-color: #4b5563 !important;
             }
             .stat-label {
-              color: #6b7280 !important;
+              color: #9ca3af !important;
             }
             .stat-value {
-              color: #111827 !important;
+              color: #f3f4f6 !important;
             }
             .count-highlight {
-              background: none !important;
-              color: #4c1d95 !important;
-              -webkit-text-fill-color: #4c1d95 !important;
+              background: linear-gradient(135deg, #818cf8 0%, #c084fc 100%) !important;
+              -webkit-background-clip: text !important;
+              -webkit-text-fill-color: transparent !important;
+              background-clip: text !important;
+            }
+            .intro-text {
+              color: #d1d5db !important;
+            }
+            .info-text {
+              color: #9ca3af !important;
+            }
+            .footer {
+              background-color: #1f2937 !important;
+              border-top: 1px solid #374151 !important;
+            }
+            .footer-text {
+              color: #9ca3af !important;
             }
           }
         </style>
@@ -597,9 +645,8 @@ export async function sendBatchProcessingCompleteEmail(emailData: {
               </p>
 
               <div class="cta-container">
-                <a href="${
-                  process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-                }/batch-upload?session_id=${sessionId}" class="cta-button">
+                <a href="${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+      }/batch-upload?session_id=${sessionId}" class="cta-button">
                   View & Export Results →
                 </a>
               </div>
@@ -975,10 +1022,9 @@ export async function sendProcessingFailedEmail(emailData: {
                   What happened?
                 </h3>
                 <p class="info-text">
-                  ${
-                    errorMessage ||
-                    "The automated OCR system was unable to extract information from your receipt. This can happen with low-quality images, unusual receipt formats, or faded text."
-                  }
+                  ${errorMessage ||
+      "The automated OCR system was unable to extract information from your receipt. This can happen with low-quality images, unusual receipt formats, or faded text."
+      }
                 </p>
               </div>
               
@@ -992,9 +1038,8 @@ export async function sendProcessingFailedEmail(emailData: {
               </p>
               
               <div class="cta-container">
-                <a href="${
-                  process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-                }/upload" class="cta-button">
+                <a href="${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+      }/upload" class="cta-button">
                   Try Again →
                 </a>
               </div>

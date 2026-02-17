@@ -47,10 +47,11 @@ model AuthUser {
   referralsReceived  ReferralTracking[]  @relation("Referred")
   batchSessions      BatchSession[]
   processedEmails    ProcessedEmail[]
-  
+
   // Team Relations
-  ownedTeams         Team[]
-  teamMemberships    TeamMember[]
+  ownedTeams      Team[]
+  teamMemberships TeamMember[]
+  userCategories  UserCategory[]
 
   @@index([subscriptionTier], map: "idx_auth_users_subscription_tier")
   @@index([subscriptionStatus], map: "idx_auth_users_subscription_status")
@@ -300,7 +301,7 @@ model ProcessedEmail {
 
   // Relations
 
-// Relations
+  // Relations
   user AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId], map: "idx_processed_emails_user_id")
@@ -327,22 +328,22 @@ model Team {
   updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   // Relations
-  owner       AuthUser     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  members     TeamMember[]
-  invites     TeamInvite[]
-  receipts    Receipt[]
-  reports     Report[]
+  owner    AuthUser     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  members  TeamMember[]
+  invites  TeamInvite[]
+  receipts Receipt[]
+  reports  Report[]
 
   @@index([ownerId], map: "idx_teams_owner_id")
   @@map("teams")
 }
 
 model TeamMember {
-  id        Int      @id @default(autoincrement())
-  teamId    Int      @map("team_id")
-  userId    Int      @map("user_id")
-  role      TeamRole @default(MEMBER)
-  joinedAt  DateTime @default(now()) @map("joined_at") @db.Timestamptz(6)
+  id       Int      @id @default(autoincrement())
+  teamId   Int      @map("team_id")
+  userId   Int      @map("user_id")
+  role     TeamRole @default(MEMBER)
+  joinedAt DateTime @default(now()) @map("joined_at") @db.Timestamptz(6)
 
   // Relations
   team Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
@@ -371,4 +372,21 @@ model TeamInvite {
   @@index([email], map: "idx_team_invites_email")
   @@index([token], map: "idx_team_invites_token")
   @@map("team_invites")
+}
+
+model UserCategory {
+  id          String   @id @default(cuid())
+  userId      Int      @map("user_id")
+  title       String   @db.VarChar(100)
+  description String?  @db.Text
+  keywords    String[] // Array of strings
+  embedding   Float[] // Array of floats
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  user AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_user_categories_user_id")
+  @@map("user_categories")
 }

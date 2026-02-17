@@ -28,16 +28,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // Process the OCR outside the DB transaction (slow phase)
     try {
-      const extractedData = await aiOCRExtraction(file_url, filename);
+      const extractedData = await aiOCRExtraction(file_url, filename, userId);
 
       // Perform atomic update within a transaction to avoid race conditions
-      await prisma.$transaction(async (tx) => {
-        // Lock the row for update to ensure we have the most recent 'files' state
-        const currentSessions = await tx.$queryRaw<any[]>`
+      await prisma.$transaction(async (tx: any) => {
+        const currentSessions = await tx.$queryRaw`
           SELECT files, status FROM batch_sessions WHERE id = ${batchSessionId} FOR UPDATE
         `;
 
-        const currentSession = currentSessions[0];
+        const currentSession = (currentSessions as any[])[0];
         if (!currentSession) throw new Error("Batch session disappeared during processing");
 
         const currentFiles: Array<{
@@ -48,24 +47,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           extractedData?: ExtractedData;
         }> = safeJsonParse(currentSession.files, []);
 
-        // Update the specific file result
         currentFiles[fileIndex] = {
           ...currentFiles[fileIndex],
           status: "completed",
           extractedData,
         };
 
-        // Check if all files are completed
-        const allCompleted = currentFiles.every((file) => file.status === "completed");
         const allDone = currentFiles.every((file) => file.status === "completed" || file.status === "failed");
         const hasFailures = currentFiles.some((file) => file.status === "failed");
-        
+
         let newStatus = "processing";
         if (allDone) {
           newStatus = hasFailures ? "failed" : "completed";
         }
 
-        // Save the merged state
         await tx.batchSession.update({
           where: { id: batchSessionId },
           data: {
@@ -82,13 +77,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     } catch (ocrError) {
       console.error("OCR processing error:", ocrError);
 
-      // Handle failure case also with a transaction
       try {
-        await prisma.$transaction(async (tx) => {
-          const currentSessions = await tx.$queryRaw<any[]>`
+        await prisma.$transaction(async (tx: any) => {
+          const currentSessions = await tx.$queryRaw`
             SELECT files, status FROM batch_sessions WHERE id = ${batchSessionId} FOR UPDATE
           `;
-          const currentSession = currentSessions[0];
+          const currentSession = (currentSessions as any[])[0];
           if (!currentSession) return;
 
           const currentFiles: Array<{

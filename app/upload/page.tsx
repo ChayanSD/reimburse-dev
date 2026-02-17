@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { useAuth } from "@/lib/hooks/useAuth";
 import AuthGuard from "@/components/AuthGuard";
@@ -41,10 +41,20 @@ export default function UploadPage() {
 }
 
 function UploadContent() {
-  const { isLoading: userLoading } = useAuth();
+  const { user, isLoading: userLoading } = useAuth();
   const queryClient = useQueryClient();
   const [upload, { loading: uploadLoading }] = useUpload();
-  
+
+  // Fetch user categories
+  const { data: userCategories = [] } = useQuery({
+    queryKey: ["user-categories"],
+    queryFn: async () => {
+      const response = await axios.get("/api/categories");
+      return response.data.categories;
+    },
+    enabled: !!user,
+  });
+
   // State management
   const [dragActive, setDragActive] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
@@ -123,7 +133,7 @@ function UploadContent() {
     onError: (err: Error | unknown) => {
       console.error("OCR error:", err);
       setError("Failed to queue receipt for processing. You can enter the details manually.");
-      
+
       // Send failure email notification
       if (uploadedFile && !emailNotificationSent) {
         emailMutation.mutate({
@@ -134,7 +144,7 @@ function UploadContent() {
           }
         });
       }
-      
+
       // Set default data for manual entry
       const defaultData: ExtractedData = {
         merchant_name: "",
@@ -151,7 +161,7 @@ function UploadContent() {
   const pollReceiptStatus = async (id: number, filename: string) => {
     let pollCount = 0;
     const maxPolls = 60; // 2 minutes / 2 seconds = 60 polls max
-    
+
     // Progress simulation stages with icons
     const stages = [
       { progress: 20, stage: "Queuing receipt for processing...", icon: Clock },
@@ -163,7 +173,7 @@ function UploadContent() {
 
     const pollInterval = setInterval(async () => {
       pollCount++;
-      
+
       // Update estimated time remaining
       if (startTime) {
         const remainingPolls = maxPolls - pollCount;
@@ -176,7 +186,7 @@ function UploadContent() {
             : `${seconds}s remaining`
         );
       }
-      
+
       // Update progress based on poll count
       if (pollCount <= stages.length) {
         const currentStage = stages[Math.min(pollCount - 1, stages.length - 1)];
@@ -200,7 +210,7 @@ function UploadContent() {
           setProcessingProgress(100);
           setProcessingStage("Processing complete!");
           setEstimatedTimeRemaining("");
-          
+
           // Send email notification if not already sent
           if (!emailNotificationSent) {
             emailMutation.mutate({
@@ -215,7 +225,7 @@ function UploadContent() {
             });
             setEmailNotificationSent(true);
           }
-          
+
           // Show data instantly without delay
           const extractedData: ExtractedData = {
             merchant_name: data.merchant_name,
@@ -234,7 +244,7 @@ function UploadContent() {
           setProcessingProgress(100);
           setEstimatedTimeRemaining("");
           setProcessingStage("Processing failed");
-          
+
           // Send failure email notification
           if (!emailNotificationSent) {
             emailMutation.mutate({
@@ -246,7 +256,7 @@ function UploadContent() {
             });
             setEmailNotificationSent(true);
           }
-          
+
           setError("OCR processing failed. You can enter the details manually.");
           setProcessingStatus(null);
           // Set default data for manual entry
@@ -352,12 +362,12 @@ function UploadContent() {
       setSuccess(false);
       setExtractedData(null);
       setEditedData(null);
-      
+
       // Show progress bar immediately
       setProcessingProgress(5);
       setProcessingStage("Uploading receipt...");
       setProcessingStatus("uploading");
-      
+
       // Set a temporary uploaded file state to show progress bar
       setUploadedFile({
         url: "",
@@ -599,25 +609,25 @@ function UploadContent() {
                 <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/20 to-transparent animate-pulse"></div>
                 <Check size={36} className="text-white relative z-10" />
               </div>
-              
+
               <h2
                 className="text-2xl font-bold text-gray-900 mb-3"
                 style={{ fontFamily: "Poppins, sans-serif" }}
               >
                 🎉 Receipt Saved Successfully!
               </h2>
-              
+
               <p className="text-gray-600 mb-4">
                 Your receipt has been processed and added to your dashboard.
               </p>
-              
+
               {emailNotificationSent && (
                 <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm font-medium mb-6">
                   <CheckCircle size={16} />
                   <span>Email notification sent!</span>
                 </div>
               )}
-              
+
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <button
                   onClick={resetUpload}
@@ -639,11 +649,10 @@ function UploadContent() {
             /* Upload Zone */
             <div className="bg-white rounded-3xl p-8 border border-gray-200">
               <div
-                className={`relative border-2 border-dashed rounded-3xl p-12 text-center transition-colors ${
-                  dragActive
-                    ? "border-[#2E86DE] bg-[#2E86DE] bg-opacity-5"
-                    : "border-gray-300 hover:border-gray-400"
-                }`}
+                className={`relative border-2 border-dashed rounded-3xl p-12 text-center transition-colors ${dragActive
+                  ? "border-[#2E86DE] bg-[#2E86DE] bg-opacity-5"
+                  : "border-gray-300 hover:border-gray-400"
+                  }`}
                 onDragEnter={handleDrag}
                 onDragLeave={handleDrag}
                 onDragOver={handleDrag}
@@ -659,15 +668,13 @@ function UploadContent() {
                 />
 
                 <div className="relative">
-                  <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 transition-all duration-300 ${
-                    dragActive 
-                      ? 'bg-linear-to-br from-[#2E86DE] to-[#2574C7] shadow-lg transform scale-105'
-                      : 'bg-[#2E86DE]/20'
-                  }`}>
-                    <Upload size={36} className={`transition-colors duration-300 ${
-                      dragActive ? 'text-white' : 'text-[#2E86DE]'
-                    }`} />
-                    
+                  <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 transition-all duration-300 ${dragActive
+                    ? 'bg-linear-to-br from-[#2E86DE] to-[#2574C7] shadow-lg transform scale-105'
+                    : 'bg-[#2E86DE]/20'
+                    }`}>
+                    <Upload size={36} className={`transition-colors duration-300 ${dragActive ? 'text-white' : 'text-[#2E86DE]'
+                      }`} />
+
                     {/* Floating upload particles when active */}
                     {dragActive && (
                       <>
@@ -700,11 +707,10 @@ function UploadContent() {
 
                 <label
                   htmlFor="file-upload"
-                  className={`inline-flex items-center gap-2 px-8 py-3 font-medium rounded-2xl transition-all duration-300 cursor-pointer ${
-                    dragActive
-                      ? 'bg-[#2574C7] text-white shadow-lg transform scale-105'
-                      : 'bg-[#2E86DE] hover:bg-[#2574C7] text-white hover:shadow-md'
-                  }`}
+                  className={`inline-flex items-center gap-2 px-8 py-3 font-medium rounded-2xl transition-all duration-300 cursor-pointer ${dragActive
+                    ? 'bg-[#2574C7] text-white shadow-lg transform scale-105'
+                    : 'bg-[#2E86DE] hover:bg-[#2574C7] text-white hover:shadow-md'
+                    }`}
                 >
                   <Upload size={18} />
                   {uploadLoading ? "Uploading..." : "Choose File"}
@@ -758,7 +764,7 @@ function UploadContent() {
                     <div className="w-20 h-20 bg-linear-to-br from-[#2E86DE]/20 to-[#2574C7]/20 rounded-2xl flex items-center justify-center mx-auto mb-4 relative overflow-hidden">
                       <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/20 to-transparent animate-pulse"></div>
                       <Receipt size={36} className="text-[#2E86DE] relative z-10 animate-pulse" />
-                      
+
                       {/* Floating particles */}
                       {processingProgress > 0 && (
                         <>
@@ -769,25 +775,25 @@ function UploadContent() {
                         </>
                       )}
                     </div>
-                    
+
                     <h3 className="text-xl font-semibold text-gray-900 mb-2">
                       {processingStatus === "uploading" ? "Uploading Receipt" : processingStatus === "pending" ? "Waiting in Queue" : "AI Processing in Progress"}
                     </h3>
-                    
+
                     <div className="flex items-center justify-center gap-2 mb-2">
                       <div className="w-2 h-2 bg-[#2E86DE] rounded-full animate-pulse"></div>
                       <p className="text-gray-600 font-medium">
                         {processingStage}
                       </p>
                     </div>
-                    
+
                     {estimatedTimeRemaining && (
                       <div className="flex items-center justify-center gap-1 text-sm text-[#2E86DE] font-medium mb-2">
                         <Clock size={16} />
                         <span>{estimatedTimeRemaining}</span>
                       </div>
                     )}
-                    
+
                     {receiptId && (
                       <p className="text-xs text-gray-500 mt-2">
                         Receipt ID: {receiptId}
@@ -806,7 +812,7 @@ function UploadContent() {
                         )}
                       </div>
                     </div>
-                    
+
                     <div className="relative">
                       <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden shadow-inner">
                         <div
@@ -815,22 +821,21 @@ function UploadContent() {
                         >
                           {/* Animated shimmer effect */}
                           <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/30 to-transparent animate-pulse"></div>
-                          
+
                           {/* Progress indicator */}
                           {processingProgress > 10 && (
                             <div className="w-3 h-3 bg-white rounded-full shadow-lg animate-pulse mr-1"></div>
                           )}
                         </div>
                       </div>
-                      
+
                       {/* Progress ticks */}
                       <div className="absolute top-0 left-0 w-full h-4 flex justify-between px-1 pointer-events-none">
                         {[20, 40, 60, 80, 95].map((tick) => (
                           <div
                             key={tick}
-                            className={`w-0.5 h-4 ${
-                              processingProgress >= tick ? 'bg-white/60' : 'bg-gray-300'
-                            } transition-colors duration-300`}
+                            className={`w-0.5 h-4 ${processingProgress >= tick ? 'bg-white/60' : 'bg-gray-300'
+                              } transition-colors duration-300`}
                           ></div>
                         ))}
                       </div>
@@ -849,21 +854,19 @@ function UploadContent() {
                       ].map(({ threshold, label, icon: Icon }) => {
                         const isActive = processingProgress >= threshold;
                         const isCurrent = processingProgress >= threshold - 20 && processingProgress < threshold + 20;
-                        
+
                         return (
                           <div key={threshold} className="flex flex-col items-center">
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-2 transition-all duration-300 ${
-                              isActive
-                                ? 'bg-[#2E86DE] text-white shadow-lg'
-                                : isCurrent
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-2 transition-all duration-300 ${isActive
+                              ? 'bg-[#2E86DE] text-white shadow-lg'
+                              : isCurrent
                                 ? 'bg-[#2E86DE]/20 text-[#2E86DE] animate-pulse'
                                 : 'bg-gray-200 text-gray-400'
-                            }`}>
+                              }`}>
                               <Icon size={18} />
                             </div>
-                            <span className={`text-xs font-medium text-center transition-colors duration-300 ${
-                              isActive ? 'text-[#2E86DE]' : 'text-gray-500'
-                            }`}>
+                            <span className={`text-xs font-medium text-center transition-colors duration-300 ${isActive ? 'text-[#2E86DE]' : 'text-gray-500'
+                              }`}>
                               {label}
                             </span>
                           </div>
@@ -897,117 +900,122 @@ function UploadContent() {
                   </div>
 
                   {/* Actual Form */}
-                    <div className="space-y-6">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Merchant Name
-                          </label>
-                          <input
-                            type="text"
-                            value={editedData.merchant_name || ""}
-                            onChange={(e) =>
-                              setEditedData((prev) => ({
-                                ...prev!,
-                                merchant_name: e.target.value,
-                              }))
-                            }
-                            className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#2E86DE] focus:border-transparent"
-                            placeholder="Enter merchant name"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Amount ($)
-                          </label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={String(editedData.amount || "")}
-                            onChange={(e) =>
-                              setEditedData((prev) => ({
-                                ...prev!,
-                                amount: e.target.value,
-                              }))
-                            }
-                            className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#2E86DE] focus:border-transparent"
-                            placeholder="0.00"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Date
-                          </label>
-                          <input
-                            type="date"
-                            value={editedData.receipt_date || ""}
-                            onChange={(e) =>
-                              setEditedData((prev) => ({
-                                ...prev!,
-                                receipt_date: e.target.value,
-                              }))
-                            }
-                            className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#2E86DE] focus:border-transparent"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Category
-                          </label>
-                          <select
-                            value={editedData.category || "Other"}
-                            onChange={(e) =>
-                              setEditedData((prev) => ({
-                                ...prev!,
-                                category: e.target.value,
-                              }))
-                            }
-                            className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#2E86DE] focus:border-transparent"
-                          >
-                            <option value="Meals">Meals</option>
-                            <option value="Travel">Travel</option>
-                            <option value="Supplies">Supplies</option>
-                            <option value="Other">Other</option>
-                          </select>
-                        </div>
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Merchant Name
+                        </label>
+                        <input
+                          type="text"
+                          value={editedData.merchant_name || ""}
+                          onChange={(e) =>
+                            setEditedData((prev) => ({
+                              ...prev!,
+                              merchant_name: e.target.value,
+                            }))
+                          }
+                          className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#2E86DE] focus:border-transparent"
+                          placeholder="Enter merchant name"
+                        />
                       </div>
 
-                      {error && (
-                        <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-2xl">
-                          <div className="flex items-center gap-2 text-red-600">
-                            <X size={20} />
-                            <span className="font-medium">{error}</span>
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="flex flex-col sm:flex-row gap-4">
-                        <button
-                          onClick={handleSaveReceipt}
-                          disabled={
-                            isSaveLoading ||
-                            !editedData.merchant_name ||
-                            !editedData.amount
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Amount ($)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={String(editedData.amount || "")}
+                          onChange={(e) =>
+                            setEditedData((prev) => ({
+                              ...prev!,
+                              amount: e.target.value,
+                            }))
                           }
-                          className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-[#2E86DE] hover:bg-[#2574C7] text-white font-medium rounded-2xl transition-colors disabled:opacity-50"
-                        >
-                          <Check size={18} />
-                          {isSaveLoading ? "Saving..." : "Save Receipt"}
-                        </button>
+                          className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#2E86DE] focus:border-transparent"
+                          placeholder="0.00"
+                        />
+                      </div>
 
-                        <button
-                          onClick={resetUpload}
-                          className="px-6 py-3 border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium rounded-2xl transition-colors"
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Date
+                        </label>
+                        <input
+                          type="date"
+                          value={editedData.receipt_date || ""}
+                          onChange={(e) =>
+                            setEditedData((prev) => ({
+                              ...prev!,
+                              receipt_date: e.target.value,
+                            }))
+                          }
+                          className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#2E86DE] focus:border-transparent"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Category
+                        </label>
+                        <select
+                          value={editedData.category || "Other"}
+                          onChange={(e) =>
+                            setEditedData((prev) => ({
+                              ...prev!,
+                              category: e.target.value,
+                            }))
+                          }
+                          className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#2E86DE] focus:border-transparent"
                         >
-                          Cancel
-                        </button>
+                          <option value="Meals">Meals</option>
+                          <option value="Travel">Travel</option>
+                          <option value="Supplies">Supplies</option>
+                          <option value="Other">Other</option>
+                          {userCategories.map((cat: any) => (
+                            <option key={cat.id} value={cat.title}>
+                              {cat.title}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     </div>
-              </div>
-            )}
+
+                    {error && (
+                      <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-2xl">
+                        <div className="flex items-center gap-2 text-red-600">
+                          <X size={20} />
+                          <span className="font-medium">{error}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      <button
+                        onClick={handleSaveReceipt}
+                        disabled={
+                          isSaveLoading ||
+                          !editedData.merchant_name ||
+                          !editedData.amount
+                        }
+                        className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-[#2E86DE] hover:bg-[#2574C7] text-white font-medium rounded-2xl transition-colors disabled:opacity-50"
+                      >
+                        <Check size={18} />
+                        {isSaveLoading ? "Saving..." : "Save Receipt"}
+                      </button>
+
+                      <button
+                        onClick={resetUpload}
+                        className="px-6 py-3 border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium rounded-2xl transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </main>
