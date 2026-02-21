@@ -1,6 +1,6 @@
 import prisma from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
-import crypto from "crypto";
+import { onReferredUserVerified } from "@/lib/rewards/referrals";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
@@ -43,6 +43,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         updatedAt: true,
       },
     });
+
+    // Convert referrer's pending signup points to available
+    try {
+      await onReferredUserVerified(updatedUser.id);
+    } catch (refError) {
+      console.error("Referral verification hook error:", refError);
+    }
 
     return NextResponse.json(
       {

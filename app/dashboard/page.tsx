@@ -26,6 +26,7 @@ import {
   Users,
   Shield,
   ChevronDown,
+  Gift,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -861,6 +862,12 @@ export default function DashboardPage() {
                       </Link>
                     </DropdownMenuItem>
                   )}
+                  <DropdownMenuItem asChild>
+                    <Link href="/rewards" className="flex items-center gap-2 cursor-pointer text-violet-500 w-full">
+                      <Gift size={16} />
+                      Rewards & Referrals
+                    </Link>
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
                     <Link href="/account/logout" className="flex items-center gap-2 cursor-pointer text-red-600 w-full">
@@ -918,6 +925,14 @@ export default function DashboardPage() {
                     Admin Panel
                   </Link>
                 )}
+                <Link
+                  href="/rewards"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-4 py-3 text-violet-600 hover:bg-violet-50 font-bold rounded-lg transition-colors border border-violet-100"
+                >
+                  <Gift size={20} />
+                  Rewards & Referrals
+                </Link>
                 <Link
                   href="/batch-upload"
                   onClick={() => setMobileMenuOpen(false)}

@@ -6,6 +6,8 @@ import { badRequest, unauthorized, notFound, subscriptionLimitReached, handleDat
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import type { AuthUser, CompanySettings, Receipt } from "../../generated/prisma/client";
+import { checkAndCompleteMission } from "@/lib/rewards/missions";
+import { triggerReferralMilestone } from "@/lib/rewards/referrals";
 
 function generateCSV(receipts: Receipt[], periodStart: string, periodEnd: string) {
   const headers = ["id", "date", "merchant", "category", "amount", "currency", "note", "file_url"];
@@ -131,10 +133,10 @@ function convertToPDFFormat(
       notes: companySetting?.notes
         ? [companySetting.notes]
         : [
-            "Submit receipts within 30 days",
-            "Business expenses only",
-            "Approval required for amounts over $100",
-          ],
+          "Submit receipts within 30 days",
+          "Business expenses only",
+          "Approval required for amounts over $100",
+        ],
       violations: [],
     },
     summary: {
@@ -175,7 +177,7 @@ function convertToPDFFormat(
   };
 }
 
-export async function POST(request : NextRequest) : Promise<NextResponse>{
+export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const session = await getSession();
 
@@ -191,7 +193,7 @@ export async function POST(request : NextRequest) : Promise<NextResponse>{
       // Get current usage for better error message
       const subscription = await getUserSubscriptionInfo(userId);
       const limits = getSubscriptionLimits(subscription?.tier || 'free');
-      
+
       return subscriptionLimitReached(
         'Reports',
         subscription?.usageReports || 0,
@@ -223,13 +225,13 @@ export async function POST(request : NextRequest) : Promise<NextResponse>{
     // Get team info if specified
     let team = null;
     if (team_id) {
-       team = await prisma.team.findFirst({
-         where: { 
-           id: team_id,
-           members: { some: { userId: userId } }
-         },
-         include: { owner: true }
-       });
+      team = await prisma.team.findFirst({
+        where: {
+          id: team_id,
+          members: { some: { userId: userId } }
+        },
+        include: { owner: true }
+      });
     }
 
     // Get receipts by IDs with proper user scoping
@@ -332,6 +334,14 @@ export async function POST(request : NextRequest) : Promise<NextResponse>{
       }
     });
 
+    // Rewards: check first_export mission + referral milestone (non-blocking)
+    try {
+      await checkAndCompleteMission(userId, 'first_export');
+      await triggerReferralMilestone(userId, 'FIRST_EXPORT');
+    } catch (rewardsError) {
+      console.error('Rewards hook error:', rewardsError);
+    }
+
     return NextResponse.json({
       success: true,
       report: report,
@@ -342,21 +352,21 @@ export async function POST(request : NextRequest) : Promise<NextResponse>{
     });
   } catch (error: any) {
     console.error("POST /api/reports error:", error);
-    
+
     // Log full error details for debugging
     if (error instanceof Error) {
       console.error("Error name:", error.name);
       console.error("Error message:", error.message);
       console.error("Error stack:", error.stack);
     }
-    
+
     // Check if it's a PDF generation error
     if (error instanceof Error && (
-      error.message.includes("PDF") || 
+      error.message.includes("PDF") ||
       error.message.includes("generatePDF")
     )) {
       return NextResponse.json(
-        { 
+        {
           error: "Failed to generate PDF report",
           message: error.message,
           details: process.env.NODE_ENV === "development" ? error.stack : undefined
@@ -364,13 +374,13 @@ export async function POST(request : NextRequest) : Promise<NextResponse>{
         { status: 500 }
       );
     }
-    
+
     // For other errors, use the database error handler
     return handleDatabaseError(error as Error);
   }
 }
 
-export async function GET() : Promise<NextResponse> {
+export async function GET(): Promise<NextResponse> {
   try {
     const session = await getSession();
 

@@ -53,6 +53,11 @@ model AuthUser {
   teamMemberships TeamMember[]
   userCategories  UserCategory[]
 
+  // Rewards Relations
+  pointsLedger       PointsLedger[]
+  missionCompletions MissionCompletion[]
+  redemptions        Redemption[]
+
   @@index([subscriptionTier], map: "idx_auth_users_subscription_tier")
   @@index([subscriptionStatus], map: "idx_auth_users_subscription_status")
   @@index([stripeCustomerId], map: "idx_auth_users_stripe_customer_id")
@@ -389,4 +394,90 @@ model UserCategory {
 
   @@index([userId], map: "idx_user_categories_user_id")
   @@map("user_categories")
+}
+
+// Referral + Rewards System
+
+model PointsLedger {
+  id        Int       @id @default(autoincrement())
+  userId    Int       @map("user_id")
+  type      String    @db.VarChar(20) // earn, spend, reversal, adjustment
+  status    String    @default("available") @db.VarChar(20) // pending, available, voided
+  points    Int
+  source    String    @db.VarChar(50) // signup_referral, first_upload, mission_xxx, admin, redemption, etc.
+  sourceId  String?   @map("source_id") @db.Text // foreign reference (referral id, receipt id, etc.)
+  note      String?   @db.Text
+  expiresAt DateTime? @map("expires_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_points_ledger_user_id")
+  @@index([userId, status], map: "idx_points_ledger_user_status")
+  @@index([source, sourceId], map: "idx_points_ledger_source")
+  @@map("points_ledger")
+}
+
+// Missions — onboarding tasks that award points
+model Mission {
+  id          String  @id @default(cuid())
+  key         String  @unique @db.VarChar(50) // first_upload, connect_email, first_export, invite_team
+  title       String  @db.VarChar(100)
+  description String? @db.Text
+  points      Int
+  isActive    Boolean @default(true) @map("is_active")
+  sortOrder   Int     @default(0) @map("sort_order")
+
+  completions MissionCompletion[]
+
+  @@map("missions")
+}
+
+// Tracks which user completed which mission
+model MissionCompletion {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @map("user_id")
+  missionId   String   @map("mission_id")
+  completedAt DateTime @default(now()) @map("completed_at") @db.Timestamptz(6)
+
+  user    AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mission Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, missionId], map: "idx_mission_completion_unique")
+  @@map("mission_completions")
+}
+
+// Rewards available for redemption
+model RewardsCatalog {
+  id          Int     @id @default(autoincrement())
+  title       String  @db.VarChar(100)
+  description String? @db.Text
+  pointsCost  Int     @map("points_cost")
+  rewardType  String  @map("reward_type") @db.VarChar(30) // stripe_credit, free_months, feature_unlock
+  rewardValue Json    @map("reward_value") @db.JsonB // {amount_cents: 1000} or {months: 1, tier: "base"}
+  isActive    Boolean @default(true) @map("is_active")
+  minTier     Int     @default(1) @map("min_tier")
+  sortOrder   Int     @default(0) @map("sort_order")
+
+  redemptions Redemption[]
+
+  @@map("rewards_catalog")
+}
+
+// Tracks reward redemptions
+model Redemption {
+  id          Int       @id @default(autoincrement())
+  userId      Int       @map("user_id")
+  rewardId    Int       @map("reward_id")
+  pointsSpent Int       @map("points_spent")
+  status      String    @default("pending") @db.VarChar(20) // pending, fulfilled, failed
+  fulfilledAt DateTime? @map("fulfilled_at") @db.Timestamptz(6)
+  metadata    Json?     @db.JsonB
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user   AuthUser       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reward RewardsCatalog @relation(fields: [rewardId], references: [id])
+
+  @@index([userId], map: "idx_redemptions_user_id")
+  @@map("redemptions")
 }

@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { can, getTeamMember } from "@/lib/permissions";
 import crypto from "crypto";
+import { MISSION_KEYS, checkAndCompleteMission } from "@/lib/rewards/missions";
 
 const inviteMemberSchema = z.object({
   email: z.email(),
@@ -46,12 +47,12 @@ export async function GET(
   });
 
   const invites = await prisma.teamInvite.findMany({
-      where: { 
-          teamId: tid,
-          status: "pending",
-          expiresAt: { gt: new Date() }
-      },
-      orderBy: { createdAt: "desc" }
+    where: {
+      teamId: tid,
+      status: "pending",
+      expiresAt: { gt: new Date() }
+    },
+    orderBy: { createdAt: "desc" }
   });
 
   return NextResponse.json({ members, invites });
@@ -83,15 +84,15 @@ export async function POST(
   });
 
   if (!team) {
-      return NextResponse.json({ error: "Team not found" }, { status: 404 });
+    return NextResponse.json({ error: "Team not found" }, { status: 404 });
   }
 
   // Get inviter details
   const inviter = await prisma.authUser.findUnique({
-      where: { id: session.id },
-      select: { firstName: true, lastName: true, email: true }
+    where: { id: session.id },
+    select: { firstName: true, lastName: true, email: true }
   });
-  
+
   const inviterName = [inviter?.firstName, inviter?.lastName].filter(Boolean).join(" ") || inviter?.email || "Someone";
 
   try {
@@ -120,16 +121,16 @@ export async function POST(
 
     // Check for pending invites
     const existingInvite = await prisma.teamInvite.findFirst({
-        where: {
-            teamId: tid,
-            email: email,
-            status: "pending",
-            expiresAt: { gt: new Date() }
-        }
+      where: {
+        teamId: tid,
+        email: email,
+        status: "pending",
+        expiresAt: { gt: new Date() }
+      }
     });
 
     if (existingInvite) {
-        return NextResponse.json({ error: "Invitation already pending" }, { status: 409 });
+      return NextResponse.json({ error: "Invitation already pending" }, { status: 409 });
     }
 
     // Create Invite
@@ -138,28 +139,35 @@ export async function POST(
     expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiry
 
     await prisma.teamInvite.create({
-        data: {
-            teamId: tid,
-            email,
-            role,
-            token,
-            expiresAt,
-            status: "pending"
-        }
+      data: {
+        teamId: tid,
+        email,
+        role,
+        token,
+        expiresAt,
+        status: "pending"
+      }
     });
 
     // Send Email
     const inviteLink = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/join-team?token=${token}`;
-    
+
     // Dynamically import to avoid top-level await issues if any
     const { sendTeamInviteEmail } = await import("@/lib/emailService");
-    
+
     await sendTeamInviteEmail({
-        to: email,
-        teamName: team.name,
-        inviterName: inviterName,
-        inviteLink
+      to: email,
+      teamName: team.name,
+      inviterName: inviterName,
+      inviteLink
     });
+
+    // REWARDS: MISSION COMPLETE (invite_team)
+    try {
+      await checkAndCompleteMission(session.id, MISSION_KEYS.INVITE_TEAM);
+    } catch (rewardsError) {
+      console.error("Rewards hook error (invite_team):", rewardsError);
+    }
 
     return NextResponse.json({ message: "Invitation sent successfully" }, { status: 200 });
 
