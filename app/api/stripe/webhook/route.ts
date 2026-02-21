@@ -3,6 +3,8 @@ import prisma from "@/lib/prisma";
 import { internalServerError } from "@/lib/error";
 import { getStripeInstance } from "@/lib/stripe";
 import { NextRequest, NextResponse } from "next/server";
+import { triggerReferralMilestone } from "@/lib/rewards/referrals";
+import { reversePoints } from "@/lib/rewards/points";
 
 // Initialize Stripe with environment-based key
 
@@ -10,11 +12,11 @@ import { NextRequest, NextResponse } from "next/server";
 const getWebhookSecret = () => {
   const isLive = process.env.STRIPE_MODE === 'live';
   const webhookSecret = isLive ? process.env.STRIPE_WEBHOOK_SECRET_LIVE : process.env.STRIPE_WEBHOOK_SECRET_TEST;
-  
+
   if (!webhookSecret) {
     throw new Error(`Stripe ${isLive ? 'live' : 'test'} webhook secret not configured`);
   }
-  
+
   return webhookSecret;
 };
 
@@ -33,7 +35,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const stripe = getStripeInstance();
     const webhookSecret = getWebhookSecret();
-    
+
     event = stripe.webhooks.constructEvent(body, sig, webhookSecret);
   } catch (err) {
     console.error("Webhook signature verification failed:", err);
@@ -66,6 +68,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
       case "invoice.payment_failed":
         await handleInvoicePaymentFailed(event.data.object as Stripe.Invoice);
+        break;
+
+      case "charge.refunded":
+        await handleChargeRefunded(event.data.object as Stripe.Charge);
         break;
 
       case "customer.subscription.trial_will_end":
@@ -176,7 +182,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
 
 async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   console.log("Processing subscription created:", subscription.id);
-  
+
   const customerId = subscription.customer as string;
   const subscriptionId = subscription.id;
   const status = subscription.status;
@@ -198,7 +204,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
 
     // Determine tier from subscription items
     const tier = determineTierFromSubscription(subscription);
-    
+
     // Update user subscription
     await prisma.authUser.update({
       where: { id: userId },
@@ -235,7 +241,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
 
 async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
   console.log("Processing subscription updated:", subscription.id);
-  
+
   const subscriptionId = subscription.id;
   const status = subscription.status;
   const currentPeriodEnd = new Date((Number((subscription as unknown as { current_period_end: number }).current_period_end)) * 1000);
@@ -255,7 +261,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     const userId = user.id;
     const oldTier = user.subscriptionTier;
     const tier = determineTierFromSubscription(subscription);
-    
+
     // Update user subscription
     await prisma.authUser.update({
       where: { id: userId },
@@ -292,7 +298,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
 
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   console.log("Processing subscription deleted:", subscription.id);
-  
+
   const subscriptionId = subscription.id;
 
   try {
@@ -308,7 +314,7 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
     }
 
     const userId = user.id;
-    
+
     // Downgrade user to free tier
     await prisma.authUser.update({
       where: { id: userId },
@@ -344,7 +350,7 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
 
 async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
   console.log("Processing invoice payment succeeded:", invoice.id);
-  
+
   const customerId = invoice.customer as string;
   const subscriptionId = ''; // subscription property not available in Stripe Invoice type
 
@@ -361,7 +367,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     }
 
     const userId = user.id;
-    
+
     // Update subscription status to active
     await prisma.authUser.update({
       where: { id: userId },
@@ -383,6 +389,13 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       },
     });
 
+    // Rewards: trigger paid subscription referral milestone (non-blocking)
+    try {
+      await triggerReferralMilestone(userId, 'PAID_SUBSCRIPTION');
+    } catch (rewardsError) {
+      console.error('Rewards milestone error:', rewardsError);
+    }
+
     console.log(`User ${userId} payment succeeded for invoice ${invoice.id}`);
   } catch (error) {
     console.error("Error processing invoice payment succeeded:", error);
@@ -392,7 +405,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
 
 async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
   console.log("Processing invoice payment failed:", invoice.id);
-  
+
   const customerId = invoice.customer as string;
 
   try {
@@ -408,7 +421,7 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
     }
 
     const userId = user.id;
-    
+
     // Update subscription status to past_due
     await prisma.authUser.update({
       where: { id: userId },
@@ -439,7 +452,7 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
 
 async function handleTrialWillEnd(subscription: Stripe.Subscription) {
   console.log("Processing trial will end:", subscription.id);
-  
+
   const customerId = subscription.customer as string;
   const trialEnd = subscription.trial_end ? new Date(subscription.trial_end * 1000) : new Date();
 
@@ -456,7 +469,7 @@ async function handleTrialWillEnd(subscription: Stripe.Subscription) {
     }
 
     const userId = user.id;
-    
+
     // Log trial ending event
     await prisma.subscriptionEvent.create({
       data: {
@@ -480,10 +493,10 @@ async function handleTrialWillEnd(subscription: Stripe.Subscription) {
 function determineTierFromSubscription(subscription: Stripe.Subscription): string {
   // Determine tier based on subscription items
   const items = subscription.items.data;
-  
+
   for (const item of items) {
     const priceId = item.price.id;
-    
+
     // Check against configured price IDs
     if (priceId === process.env.PRICE_PRO_MONTHLY || priceId === process.env.PRICE_PRO_YEARLY) {
       return 'pro';
@@ -492,7 +505,7 @@ function determineTierFromSubscription(subscription: Stripe.Subscription): strin
       return 'premium';
     }
   }
-  
+
   // Fallback to pro if we can't determine
   return 'pro';
 }
@@ -535,38 +548,57 @@ async function handleReferralBonus(userId: number, referralCode: string) {
       },
     });
 
-    // Check if referrer qualifies for free month (3 referrals)
-    const referralCount = await prisma.referralTracking.count({
-      where: { 
-        referrerId: referrerId, 
-        status: 'completed' 
-      },
-    });
-
-    if (referralCount >= 3) {
-      // Grant free month to referrer
-      const referrer = await prisma.authUser.findUnique({
-        where: { id: referrerId },
-        select: { subscriptionEndsAt: true },
-      });
-      
-      if (referrer?.subscriptionEndsAt) {
-        const newEndDate = new Date(referrer.subscriptionEndsAt);
-        newEndDate.setMonth(newEndDate.getMonth() + 1);
-        
-        await prisma.authUser.update({
-          where: { id: referrerId },
-          data: {
-            subscriptionEndsAt: newEndDate,
-          },
-        });
-      }
-
-      console.log(`Referrer ${referrerId} earned free month for 3 referrals`);
+    // Trigger paid subscription referral milestone via new rewards system
+    try {
+      await triggerReferralMilestone(userId, 'PAID_SUBSCRIPTION');
+    } catch (rewardsError) {
+      console.error('Rewards milestone error in referral bonus:', rewardsError);
     }
 
     console.log(`Referral bonus processed: ${referrerId} -> ${userId}`);
   } catch (error) {
     console.error("Error processing referral bonus:", error);
+  }
+}
+
+// Handle charge refunded — reverse associated points
+async function handleChargeRefunded(charge: Stripe.Charge) {
+  console.log("Processing charge refunded:", charge.id);
+
+  const customerId = charge.customer as string;
+
+  try {
+    const user = await prisma.authUser.findFirst({
+      where: { stripeCustomerId: customerId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      console.error("User not found for customer ID:", customerId);
+      return;
+    }
+
+    // Find any points earned from paid subscription referral for this user
+    const referralEntries = await prisma.pointsLedger.findMany({
+      where: {
+        source: 'referral_paid_sub',
+        sourceId: String(user.id),
+        type: 'earn',
+        status: { in: ['available', 'pending'] },
+      },
+    });
+
+    // Reverse each entry
+    for (const entry of referralEntries) {
+      try {
+        await reversePoints(entry.userId, entry.id, `Reversed due to charge refund ${charge.id}`);
+      } catch (reverseError) {
+        console.error(`Failed to reverse entry ${entry.id}:`, reverseError);
+      }
+    }
+
+    console.log(`Reversed ${referralEntries.length} referral point entries for refunded charge ${charge.id}`);
+  } catch (error) {
+    console.error("Error processing charge refunded:", error);
   }
 }

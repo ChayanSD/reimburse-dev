@@ -565,9 +565,7 @@ Return only JSON.`;
         extractedData.merchant_name || "Unknown Merchant"
       ).trim(),
       amount: parseFloat(extractedData.amount) || 0,
-      category: allValidCategories.includes(extractedData.category)
-        ? extractedData.category
-        : "Other",
+      category: extractedData.category || "Other",
       receipt_date: parsedDate || new Date().toISOString().split("T")[0],
       confidence: ["high", "medium", "low"].includes(extractedData.confidence)
         ? extractedData.confidence

@@ -5,7 +5,8 @@ import { z } from "zod";
 import { checkSubscriptionLimit, incrementUsage } from "@/lib/subscriptionGuard";
 import prisma from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma } from "@/app/generated/prisma/client";
+import { checkAndCompleteMission } from "@/lib/rewards/missions";
+import { triggerReferralMilestone } from "@/lib/rewards/referrals";
 
 
 const paginationSchema = z.object({
@@ -18,14 +19,14 @@ const paginationSchema = z.object({
 
 
 const unauthorized = () => NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-const handleValidationError = (error : unknown) => NextResponse.json({ error: 'Validation failed', details: error }, { status: 400 });
+const handleValidationError = (error: unknown) => NextResponse.json({ error: 'Validation failed', details: error }, { status: 400 });
 const handleDatabaseError = (error: unknown) => {
   console.error('Database error:', error);
   return NextResponse.json({ error: 'Database error' }, { status: 500 });
 };
 const paymentRequired = (message: string, data?: Record<string, unknown>) => NextResponse.json({ error: message, ...data }, { status: 402 });
 
-export async function GET(request : NextRequest) {
+export async function GET(request: NextRequest) {
   try {
     const session = await getSession();
     if (!session) {
@@ -34,7 +35,7 @@ export async function GET(request : NextRequest) {
 
     const userId = session.id;
     const { searchParams } = new URL(request.url);
-    
+
     // Parse and validate query parameters
     const teamIdParam = searchParams.get("teamId");
     const queryParams = {
@@ -64,16 +65,16 @@ export async function GET(request : NextRequest) {
       });
 
       if (!member) {
-         return NextResponse.json({ error: "Access denied to this team" }, { status: 403 });
+        return NextResponse.json({ error: "Access denied to this team" }, { status: 403 });
       }
 
       where.teamId = teamId;
 
       // Filter based on Role - Everyone in the team can see all receipts now
       if (['OWNER', 'ADMIN', 'MEMBER', 'VIEWER'].includes(member.role)) {
-         // See all receipts in team
+        // See all receipts in team
       } else {
-         where.userId = userId;
+        where.userId = userId;
       }
 
     } else {
@@ -104,7 +105,7 @@ export async function GET(request : NextRequest) {
       take: limit,
       include: {
         user: {
-             select: { firstName: true, lastName: true, email: true }
+          select: { firstName: true, lastName: true, email: true }
         }
       }
     });
@@ -131,7 +132,7 @@ export async function GET(request : NextRequest) {
       user_email: receipt.user?.email || 'Unknown',
     }));
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       receipts: transformedReceipts,
       pagination: {
         page,
@@ -146,7 +147,7 @@ export async function GET(request : NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) : Promise<NextResponse> {
+export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const session = await getSession();
     if (!session) {
@@ -181,7 +182,7 @@ export async function POST(request: NextRequest) : Promise<NextResponse> {
       });
       // Need 'create_receipt' permission. Member role has it. Viewer doesn't.
       if (!member || (member.role === 'VIEWER')) { // Using simple check or import can()
-          return NextResponse.json({ error: "Insufficient permissions to add receipts to this team" }, { status: 403 });
+        return NextResponse.json({ error: "Insufficient permissions to add receipts to this team" }, { status: 403 });
       }
     }
 
@@ -241,7 +242,7 @@ export async function POST(request: NextRequest) : Promise<NextResponse> {
       receipt = await prisma.receipt.create({
         data: {
           userId,
-          fileName : file_url.split("/").pop() || "",
+          fileName: file_url.split("/").pop() || "",
           fileUrl: file_url,
           merchantName: merchant_name,
           receiptDate: new Date(receipt_date),
@@ -266,6 +267,14 @@ export async function POST(request: NextRequest) : Promise<NextResponse> {
       category,
       team_id: teamId,
     });
+
+    // Rewards: check first_upload mission + referral milestone (non-blocking)
+    try {
+      await checkAndCompleteMission(userId, 'first_upload');
+      await triggerReferralMilestone(userId, 'FIRST_RECEIPT');
+    } catch (rewardsError) {
+      console.error('Rewards hook error:', rewardsError);
+    }
 
     return NextResponse.json({ receipt }, { status: 201 });
   } catch (error) {

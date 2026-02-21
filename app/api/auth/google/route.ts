@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth as adminAuth } from "@/lib/firebase-admin";
 import prisma from "@/lib/prisma";
 import { createSession, setSessionCookie } from "@/lib/session";
+import { attributeReferral, ensureReferralCode } from "@/lib/rewards/referrals";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
@@ -80,6 +81,23 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             isVerified: true, // Google users are pre-verified
           },
         });
+
+        // Generate referral code for new Google user
+        try {
+          await ensureReferralCode(user.id);
+        } catch (codeError) {
+          console.error("Failed to generate referral code:", codeError);
+        }
+
+        // Attribute referral if ref cookie present
+        try {
+          const refCode = req.cookies.get("ref")?.value;
+          if (refCode && typeof refCode === "string") {
+            await attributeReferral(user.id, refCode);
+          }
+        } catch (refError) {
+          console.error("Referral attribution error:", refError);
+        }
       }
     }
 

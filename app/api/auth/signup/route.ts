@@ -5,6 +5,7 @@ import crypto from "crypto";
 import { signupSchema } from "@/lib/auth";
 import { initializeUserTrial } from "@/utils/userTrail";
 import { sendVerificationEmail } from "@/lib/emailService";
+import { attributeReferral, ensureReferralCode } from "@/lib/rewards/referrals";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
@@ -65,6 +66,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
 
     await initializeUserTrial(user.id);
+
+    // Generate referral code for new user
+    try {
+      await ensureReferralCode(user.id);
+    } catch (codeError) {
+      console.error("Failed to generate referral code:", codeError);
+    }
+
+    // Attribute referral if ref cookie or body param present
+    try {
+      const refCode = body.referralCode || request.cookies.get("ref")?.value;
+      if (refCode && typeof refCode === "string") {
+        await attributeReferral(user.id, refCode);
+      }
+    } catch (refError) {
+      console.error("Referral attribution error:", refError);
+    }
 
     // Send verification email
     try {
