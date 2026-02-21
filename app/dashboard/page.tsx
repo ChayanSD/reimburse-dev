@@ -25,6 +25,7 @@ import {
   Mail,
   Users,
   Shield,
+  ChevronDown,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -46,6 +47,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
@@ -787,43 +796,6 @@ export default function DashboardPage() {
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center space-x-4 shrink-0">
               <Link
-                href="/profile"
-                className="flex items-center gap-2 text-gray-600 hover:text-gray-800 font-medium text-base"
-                title="Profile"
-              >
-                <div className="w-8 h-8 bg-[#2E86DE]/10 rounded-full flex items-center justify-center">
-                  <User size={18} className="text-[#2E86DE]" />
-                </div>
-                Profile
-              </Link>
-              <Link
-                href="/company-settings"
-                className="flex items-center gap-2 text-gray-600 hover:text-gray-800 font-medium text-base"
-                title="Company Settings"
-              >
-                <Settings size={18} />
-                Company Settings
-              </Link>
-              {subscriptionTier === 'premium' && (
-                <Link
-                  href="/teams"
-                  className="flex items-center gap-2 text-gray-600 hover:text-gray-800 font-medium text-base"
-                  title="Manage Teams"
-                >
-                  <Users size={18} />
-                  Teams
-                </Link>
-              )}
-              {((user as User)?.role === "ADMIN" || (user as User)?.is_admin) && (
-                <Link
-                  href="/admin"
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 text-amber-700 hover:from-amber-100 hover:to-orange-100 font-semibold rounded-2xl transition-all shadow-sm hover:shadow text-base group"
-                >
-                  <Shield size={18} className="text-amber-600 group-hover:scale-110 transition-transform" />
-                  Admin Panel
-                </Link>
-              )}
-              <Link
                 href="/batch-upload"
                 className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium rounded-2xl transition-colors text-base"
               >
@@ -850,14 +822,54 @@ export default function DashboardPage() {
                   {emailConnected ? "Gmail Connected" : connectingGmail ? "Connecting..." : "Connect Gmail"}
                 </button>
               )}
-              <Link
-                href="/account/logout"
-                className="flex items-center gap-2 text-gray-600 hover:text-gray-800 font-medium text-base"
-                title="Sign Out"
-              >
-                <LogOut size={18} />
-                Sign Out
-              </Link>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger className="flex items-center gap-2 text-gray-600 hover:text-gray-800 font-medium text-base outline-none">
+                  <div className="w-10 h-10 bg-[#2E86DE]/10 rounded-full flex items-center justify-center">
+                    <User size={20} className="text-[#2E86DE]" />
+                  </div>
+                  <ChevronDown size={16} />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/profile" className="flex items-center gap-2 cursor-pointer w-full">
+                      <User size={16} />
+                      Profile
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/company-settings" className="flex items-center gap-2 cursor-pointer w-full">
+                      <Settings size={16} />
+                      Company Settings
+                    </Link>
+                  </DropdownMenuItem>
+                  {subscriptionTier === 'premium' && (
+                    <DropdownMenuItem asChild>
+                      <Link href="/teams" className="flex items-center gap-2 cursor-pointer w-full">
+                        <Users size={16} />
+                        Teams
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  {((user as User)?.role === "ADMIN" || (user as User)?.is_admin) && (
+                    <DropdownMenuItem asChild>
+                      <Link href="/admin" className="flex items-center gap-2 cursor-pointer text-amber-600 w-full">
+                        <Shield size={16} />
+                        Admin Panel
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/account/logout" className="flex items-center gap-2 cursor-pointer text-red-600 w-full">
+                      <LogOut size={16} />
+                      Sign Out
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
 
             {/* Mobile Burger Menu Button */}
