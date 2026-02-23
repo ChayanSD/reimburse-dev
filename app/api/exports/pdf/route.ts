@@ -23,7 +23,7 @@ const pdfRequestSchema = z.object({
   data: z.any(),
 });
 
-export async function GET() : Promise<NextResponse> {
+export async function GET(): Promise<NextResponse> {
   return NextResponse.json({
     message: "PDF Export API",
     usage: "POST JSON data with expense report to generate PDF",
@@ -86,12 +86,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       // If teamId is provided, use team settings
       if (teamId) {
         const team = await prisma.team.findFirst({
-          where: { 
+          where: {
             id: parseInt(teamId),
             members: { some: { userId: session.id } }
           },
-          select: { 
-            defaultCurrency: true, 
+          select: {
+            defaultCurrency: true,
             name: true,
             owner: {
               select: { firstName: true, lastName: true, email: true }
@@ -136,10 +136,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         extractedData?: ExtractedData;
       }> = safeJsonParse(batchSession.files, []);
 
-      const completedFiles = files.filter(
-        (file): file is typeof file & { extractedData: NonNullable<typeof file.extractedData> } =>
-          file.status === "completed" && !!file.extractedData
-      );
+      const completedFiles = files
+        .filter(
+          (file): file is typeof file & { extractedData: NonNullable<typeof file.extractedData> } =>
+            file.status === "completed" && !!file.extractedData
+        )
+        .sort((a, b) => {
+          const dateA = new Date(a.extractedData.receipt_date).getTime();
+          const dateB = new Date(b.extractedData.receipt_date).getTime();
+          return dateA - dateB;
+        });
 
       // Calculate totals by category
       const categoryTotals: Record<string, number> = {};
@@ -206,7 +212,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       }
 
       expenseData = body.data as ExpenseReportData;
-      
+
       // Increment usage for regular report export
       await incrementUsage(session.id, 'report_exports');
     }
