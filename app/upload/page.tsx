@@ -45,11 +45,16 @@ function UploadContent() {
   const queryClient = useQueryClient();
   const [upload, { loading: uploadLoading }] = useUpload();
 
+  // Read teamId from URL
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const teamIdParam = searchParams?.get('teamId');
+  const teamId = teamIdParam ? parseInt(teamIdParam) : undefined;
+
   // Fetch user categories
   const { data: userCategories = [] } = useQuery({
-    queryKey: ["user-categories"],
+    queryKey: ["user-categories", teamId],
     queryFn: async () => {
-      const response = await axios.get("/api/categories");
+      const response = await axios.get(`/api/categories${teamId ? `?teamId=${teamId}` : ""}`);
       return response.data.categories;
     },
     enabled: !!user,
@@ -116,6 +121,7 @@ function UploadContent() {
       const response = await axios.post("/api/ocr", {
         file_url: fileUrl,
         filename,
+        teamId,
       });
       return response.data;
     },
@@ -318,10 +324,6 @@ function UploadContent() {
     }, 120000);
   };
 
-  // Read teamId from URL
-  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-  const teamIdParam = searchParams?.get('teamId');
-  const teamId = teamIdParam ? parseInt(teamIdParam) : undefined;
 
   // Receipt saving mutation
   const saveReceiptMutation = useMutation({
@@ -979,6 +981,12 @@ function UploadContent() {
                               {cat.title}
                             </option>
                           ))}
+                          {/* If detected category is not in the list, show it anyway so it's visible */}
+                          {editedData.category &&
+                            !["Meals", "Travel", "Supplies", "Other"].includes(editedData.category) &&
+                            !userCategories.find((cat: any) => cat.title === editedData.category) && (
+                              <option value={editedData.category}>{editedData.category}</option>
+                            )}
                         </select>
                       </div>
                     </div>

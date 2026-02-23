@@ -3,8 +3,18 @@
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { CreateCategoryDialog } from "./CreateCategoryDialog";
-import { Loader2, Trash2, Tag, Receipt, DollarSign } from "lucide-react";
+import { Loader2, Trash2, Tag, Receipt, DollarSign, Download, FileSpreadsheet, FileText as FilePdf } from "lucide-react";
 import { getCurrencySymbol } from "@/lib/utils";
+import useUser from "@/utils/useUser";
+import { generateCSV, downloadCSV } from "@/utils/csvGenerator";
+import { pdf } from "@react-pdf/renderer";
+import { ReimburseMePDFDocument } from "@/utils/reactPdfTemplates";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,7 +53,9 @@ export function CategoryCarousel({ onSelect, selectedCategory }: CategoryCarouse
         },
     });
 
+    const { data: user } = useUser();
     const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [exportingId, setExportingId] = useState<string | null>(null);
 
     const handleDelete = async (id: string) => {
         try {
@@ -55,6 +67,75 @@ export function CategoryCarousel({ onSelect, selectedCategory }: CategoryCarouse
             console.error(err);
         } finally {
             setDeletingId(null);
+        }
+    };
+
+    const handleExport = async (category: UserCategory, type: 'csv' | 'pdf') => {
+        if (category.receiptCount === 0) {
+            toast.error("No receipts to export in this category");
+            return;
+        }
+
+        setExportingId(`${category.id}-${type}`);
+        try {
+            // Fetch receipts for this category
+            const res = await axios.get(`/api/receipts?category=${encodeURIComponent(category.title)}&limit=1000`);
+            const receipts = res.data.receipts;
+
+            if (type === 'csv') {
+                const csvContent = generateCSV(receipts, 'personal');
+                const filename = `personal_${category.title.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+                downloadCSV(csvContent, filename);
+                toast.success(`Exported ${receipts.length} receipts to CSV`);
+            } else {
+                const reportData = {
+                    reportMeta: {
+                        report_id: `USER-CAT-${category.id}-${Date.now()}`,
+                        period_start: receipts[receipts.length - 1]?.receipt_date || new Date().toISOString(),
+                        period_end: receipts[0]?.receipt_date || new Date().toISOString(),
+                        generated_at: new Date().toISOString(),
+                        currency: receipts[0]?.currency || "USD",
+                    },
+                    submitter: {
+                        name: user?.name || user?.email || "User",
+                        email: user?.email || "",
+                    },
+                    recipient: {
+                        company_name: "Personal Expense Report",
+                        approver_name: "Self",
+                        approver_email: user?.email || "",
+                    },
+                    summary: {
+                        total_reimbursable: receipts.reduce((sum: number, r: any) => sum + parseFloat(r.amount), 0),
+                        non_reimbursable: 0,
+                        totals_by_category: [{ category: category.title, amount: category.totalSpend }],
+                    },
+                    line_items: receipts.map((r: any) => ({
+                        date: r.receipt_date,
+                        merchant: r.merchant_name,
+                        category: r.category,
+                        amount: parseFloat(r.amount),
+                        notes: r.note,
+                        submitted_by: user?.name || "User",
+                        file_url: r.file_url,
+                    })),
+                };
+
+                const blob = await pdf(<ReimburseMePDFDocument data={reportData} />).toBlob();
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `personal_${category.title.replace(/\s+/g, '_')}_report.pdf`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                toast.success(`Exported ${receipts.length} receipts to PDF`);
+            }
+        } catch (error: any) {
+            console.error("Export Error:", error);
+            toast.error(error.message || `Failed to export ${type.toUpperCase()}`);
+        } finally {
+            setExportingId(null);
         }
     };
 
@@ -94,38 +175,67 @@ export function CategoryCarousel({ onSelect, selectedCategory }: CategoryCarouse
                                     <div className="p-2.5 bg-blue-50 text-blue-600 rounded-lg">
                                         <Tag className="w-5 h-5" />
                                     </div>
-                                    {/* Delete Option (Hover) */}
-                                    <AlertDialog>
-                                        <AlertDialogTrigger asChild>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={(e) => e.stopPropagation()}
-                                                // Mobile: Always visible (opacity-100)
-                                                // Desktop: Visible on hover (sm:opacity-0 sm:group-hover:opacity-100)
-                                                className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-red-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </Button>
-                                        </AlertDialogTrigger>
-                                        <AlertDialogContent>
-                                            <AlertDialogHeader>
-                                                <AlertDialogTitle>Delete Category?</AlertDialogTitle>
-                                                <AlertDialogDescription>
-                                                    Are you sure you want to delete "{category.title}"? This will not remove receipts, but they will no longer be associated with this custom category logic.
-                                                </AlertDialogDescription>
-                                            </AlertDialogHeader>
-                                            <AlertDialogFooter>
-                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                <AlertDialogAction
-                                                    onClick={() => handleDelete(category.id)}
-                                                    className="bg-red-600 hover:bg-red-700"
+                                    <div className="flex gap-1">
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    className="h-8 w-8 text-gray-400 hover:text-blue-600 hover:bg-blue-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                                                    disabled={!!exportingId && exportingId.startsWith(category.id)}
                                                 >
-                                                    Delete
-                                                </AlertDialogAction>
-                                            </AlertDialogFooter>
-                                        </AlertDialogContent>
-                                    </AlertDialog>
+                                                    {exportingId && exportingId.startsWith(category.id) ? (
+                                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                                    ) : (
+                                                        <Download className="w-4 h-4" />
+                                                    )}
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                                <DropdownMenuItem onClick={() => handleExport(category, 'csv')}>
+                                                    <FileSpreadsheet className="w-4 h-4 mr-2" />
+                                                    Export as CSV
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => handleExport(category, 'pdf')}>
+                                                    <FilePdf className="w-4 h-4 mr-2" />
+                                                    Export as PDF
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    // Mobile: Always visible (opacity-100)
+                                                    // Desktop: Visible on hover (sm:opacity-0 sm:group-hover:opacity-100)
+                                                    className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-red-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>Delete Category?</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        Are you sure you want to delete "{category.title}"? This will not remove receipts, but they will no longer be associated with this custom category logic.
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                    <AlertDialogAction
+                                                        onClick={() => handleDelete(category.id)}
+                                                        className="bg-red-600 hover:bg-red-700"
+                                                    >
+                                                        Delete
+                                                    </AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
+                                    </div>
                                 </div>
 
                                 <div>

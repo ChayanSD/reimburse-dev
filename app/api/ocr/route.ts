@@ -27,7 +27,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const validation = ocrRequestSchema.safeParse(body);
     if (!validation.success) return handleValidationError(validation.error);
 
-    const { file_url, filename } = validation.data;
+    const { file_url, filename, teamId } = validation.data;
 
     // Check subscription limits for OCR processing (receipt uploads)
     const subscriptionCheck = await checkSubscriptionLimit(userId, 'receipt_uploads');
@@ -56,6 +56,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       const receipt = await prisma.receipt.create({
         data: {
           userId,
+          teamId: teamId || null,
           merchantName: parsedCache.merchant_name,
           amount: parsedCache.amount,
           currency: parsedCache.currency,
@@ -87,6 +88,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const receipt = await prisma.receipt.create({
       data: {
         userId,
+        teamId: teamId || null,
         merchantName: "Processing...",
         amount: 0,
         receiptDate: new Date(),
@@ -105,6 +107,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       body: {
         receiptId: receipt.id,
         userId,
+        teamId,
         file_url: sanitizedFileUrl,
         filename: sanitizedFilename,
       },

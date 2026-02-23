@@ -11,7 +11,7 @@ import { triggerReferralMilestone } from "@/lib/rewards/referrals";
 
 const paginationSchema = z.object({
   page: z.number().int().min(1).default(1),
-  limit: z.number().int().min(1).max(100).default(20),
+  limit: z.number().int().min(1).max(1000).default(20),
   from: z.string().optional(),
   to: z.string().optional(),
   category: z.string().optional(),
@@ -128,6 +128,7 @@ export async function GET(request: NextRequest) {
       created_at: receipt.createdAt.toISOString(),
       updated_at: receipt.updatedAt.toISOString(),
       team_id: receipt.teamId,
+      user_id: receipt.userId,
       user_name: receipt.user ? `${receipt.user.firstName} ${receipt.user.lastName}` : 'Unknown',
       user_email: receipt.user?.email || 'Unknown',
     }));

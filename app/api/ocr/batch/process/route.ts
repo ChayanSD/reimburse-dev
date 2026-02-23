@@ -20,7 +20,7 @@ export const maxDuration = 60;
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const body = await request.json();
-    const { batchSessionId, fileIndex, userId, file_url, filename } = body;
+    const { batchSessionId, fileIndex, userId, teamId, file_url, filename } = body;
 
     if (!batchSessionId || fileIndex === undefined || !userId || !file_url || !filename) {
       return NextResponse.json({ error: "Missing required parameters" }, { status: 400 });
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // Process the OCR outside the DB transaction (slow phase)
     try {
-      const extractedData = await aiOCRExtraction(file_url, filename, userId);
+      const extractedData = await aiOCRExtraction(file_url, filename, userId, teamId);
 
       // Perform atomic update within a transaction to avoid race conditions
       await prisma.$transaction(async (tx: any) => {

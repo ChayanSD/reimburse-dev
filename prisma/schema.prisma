@@ -333,11 +333,12 @@ model Team {
   updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   // Relations
-  owner    AuthUser     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  members  TeamMember[]
-  invites  TeamInvite[]
-  receipts Receipt[]
-  reports  Report[]
+  owner          AuthUser       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  members        TeamMember[]
+  invites        TeamInvite[]
+  receipts       Receipt[]
+  reports        Report[]
+  teamCategories UserCategory[]
 
   @@index([ownerId], map: "idx_teams_owner_id")
   @@map("teams")
@@ -382,6 +383,7 @@ model TeamInvite {
 model UserCategory {
   id          String   @id @default(cuid())
   userId      Int      @map("user_id")
+  teamId      Int?     @map("team_id")
   title       String   @db.VarChar(100)
   description String?  @db.Text
   keywords    String[] // Array of strings
@@ -391,8 +393,10 @@ model UserCategory {
 
   // Relations
   user AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team Team?    @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   @@index([userId], map: "idx_user_categories_user_id")
+  @@index([teamId], map: "idx_user_categories_team_id")
   @@map("user_categories")
 }
 

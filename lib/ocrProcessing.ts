@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { getUserCategoriesForAI, getTeamCategoriesForAI } from "@/lib/categories";
 import { withKeyProtection, SecureKeyStore } from "@/lib/security";
 import prisma from "@/lib/prisma";
 
@@ -445,12 +446,11 @@ async function imageUrlToBase64(imageUrl: string): Promise<string> {
   }
 }
 
-import { getUserCategoriesForAI } from "@/lib/categories";
-
 async function aiOCRExtraction(
   fileUrl: string,
   filename: string,
-  userId?: number
+  userId?: number,
+  teamId?: number
 ): Promise<ExtractedData> {
   try {
     console.log("Starting AI OCR extraction");
@@ -458,24 +458,46 @@ async function aiOCRExtraction(
     // Convert image to base64 with caching
     const base64Image = await imageUrlToBase64(fileUrl);
 
-    // Fetch user categories if userId is provided
-    let userCategoriesPrompt = "";
-    let userCategoryTitles: string[] = [];
+    // Fetch categories if userId or teamId is provided
+    let categoriesPrompt = "";
+    let categoryTitles: string[] = [];
 
-    if (userId) {
-      try {
-        const userCategories = await getUserCategoriesForAI(userId);
-        if (userCategories.length > 0) {
-          userCategoryTitles = userCategories.map((c: { title: string }) => c.title);
-          userCategoriesPrompt = `
-    USER DEFINED CATEGORIES (PRIORITIZE THESE IF APPLICABLE):
-    ${userCategories.map((c: { title: string; description: string | null }) => `- ${c.title}: ${c.description || "No description"}`).join("\n")}
-          `;
+    const fetchCategories = async () => {
+      const categories: { title: string; description: string | null }[] = [];
+
+      if (userId) {
+        try {
+          const userCats = await getUserCategoriesForAI(userId, teamId);
+          categories.push(...userCats);
+        } catch (err) {
+          console.error("Failed to fetch user categories for OCR:", err);
         }
-      } catch (err) {
-        console.error("Failed to fetch user categories for OCR:", err);
-        // Continue without user categories
       }
+
+      if (teamId) {
+        try {
+          const teamCats = await getTeamCategoriesForAI(teamId);
+          // Avoid duplicates if user is also member and some categories overlap
+          teamCats.forEach(tc => {
+            if (!categories.find(c => c.title === tc.title)) {
+              categories.push(tc);
+            }
+          });
+        } catch (err) {
+          console.error("Failed to fetch team categories for OCR:", err);
+        }
+      }
+
+      return categories;
+    };
+
+    const allCategories = await fetchCategories();
+    if (allCategories.length > 0) {
+      categoryTitles = allCategories.map((c: { title: string }) => c.title);
+      categoriesPrompt = `
+    USER/TEAM DEFINED CATEGORIES (PRIORITIZE THESE IF APPLICABLE):
+    ${allCategories.map((c: { title: string; description: string | null }) => `- ${c.title}: ${c.description || "No description"}`).join("\n")}
+      `;
     }
 
     // Simplified, more concise system prompt
@@ -487,7 +509,7 @@ You must reason carefully before answering. Accuracy matters more than speed.
 COMPREHENSIVE DOCUMENT TYPES YOU MUST HANDLE:
 ... [Standard types omitted for brevity, assume they are known] ...
 
-${userCategoriesPrompt}
+${categoriesPrompt}
 
 --------------------------------
 OUTPUT FORMAT (STRICT)
@@ -498,7 +520,7 @@ Do NOT include explanations, markdown, or extra text.
 {
   "merchant_name": "Business name",
   "amount": 0.00,
-  "category": "Meals|Travel|Supplies|Other${userCategoryTitles.length > 0 ? "|" + userCategoryTitles.join("|") : ""}",
+  "category": "Meals|Travel|Supplies|Other${categoryTitles.length > 0 ? "|" + categoryTitles.join("|") : ""}",
   "receipt_date": "YYYY-MM-DD",
   "confidence": "high|medium|low",
   "currency": "USD|EUR|GBP|JPY|INR|CAD|AUD|CHF|Other",
@@ -558,7 +580,7 @@ Return only JSON.`;
     }
 
     const standardCategories = ["Meals", "Travel", "Supplies", "Other"];
-    const allValidCategories = [...standardCategories, ...userCategoryTitles];
+    const allValidCategories = [...standardCategories, ...categoryTitles];
 
     return {
       merchant_name: String(
