@@ -6,7 +6,7 @@ import prisma from "@/lib/prisma";
 
 const adjustSchema = z.object({
     userId: z.number().int().positive(),
-    points: z.number().int().refine((v) => v !== 0, { message: "Points cannot be zero" }),
+    points: z.number().int().positive({ message: "Points must be a positive number" }),
     note: z.string().min(3).max(500),
 });
 
@@ -45,6 +45,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
         const entry = await adjustPoints(userId, points, note, session.id);
 
+        // Fetch updated balance for email
+        const { getPointsBalance } = await import("@/lib/rewards/points");
+        const balance = await getPointsBalance(userId);
+
+        // Send notification email
+        const { sendPointsAdjustmentEmail } = await import("@/lib/emailService");
+        await sendPointsAdjustmentEmail({
+            to: user.email,
+            points,
+            newBalance: balance.available,
+            reason: note
+        });
+
         return NextResponse.json({
             success: true,
             entry,
@@ -69,13 +82,44 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
         const { searchParams } = new URL(request.url);
         const userId = parseInt(searchParams.get("userId") || "0");
+        const search = searchParams.get("search");
 
-        if (!userId) {
-            return NextResponse.json({ error: "userId is required" }, { status: 400 });
+        if (!userId && !search) {
+            return NextResponse.json({ error: "userId or search term is required" }, { status: 400 });
+        }
+
+        // If searching by name/email
+        if (search) {
+            const users = await prisma.authUser.findMany({
+                where: {
+                    OR: [
+                        { email: { contains: search, mode: 'insensitive' } },
+                        { firstName: { contains: search, mode: 'insensitive' } },
+                        { lastName: { contains: search, mode: 'insensitive' } }
+                    ]
+                },
+                select: {
+                    id: true,
+                    email: true,
+                    firstName: true,
+                    lastName: true,
+                },
+                take: 5
+            });
+            return NextResponse.json({ users });
         }
 
         const { getPointsBalance, getPointsHistory } = await import("@/lib/rewards/points");
         const { getUserTier } = await import("@/lib/rewards/tiers");
+
+        const user = await prisma.authUser.findUnique({
+            where: { id: userId },
+            select: { id: true, email: true, firstName: true, lastName: true }
+        });
+
+        if (!user) {
+            return NextResponse.json({ error: "User not found" }, { status: 404 });
+        }
 
         const [balance, tier, historyResult] = await Promise.all([
             getPointsBalance(userId),
@@ -85,6 +129,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
         return NextResponse.json({
             userId,
+            user,
             balance,
             tier,
             recentHistory: historyResult.entries,

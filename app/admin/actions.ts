@@ -3,7 +3,7 @@
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, unstable_cache } from "next/cache";
 
 // Types for our chart data
 export interface ChartData {
@@ -43,176 +43,150 @@ export async function checkAdminAccess() {
   }
 }
 
+const fetchDashboardStats = unstable_cache(
+  async (days: number): Promise<DashboardStats> => {
+    const date = new Date();
+    date.setDate(date.getDate() - days);
+
+    const prevDate = new Date(date);
+    prevDate.setDate(prevDate.getDate() - days);
+
+    const [
+      totalUsers,
+      usersCurrentPeriod,
+      usersPrevPeriod,
+      activeSubscriptions,
+      proUsers,
+      premiumUsers,
+      totalReceipts,
+      receiptsCurrentPeriod,
+      receiptsPrevPeriod,
+      ocrAttempts,
+      ocrFailures
+    ] = await Promise.all([
+      prisma.authUser.count(),
+      prisma.authUser.count({ where: { createdAt: { gte: date } } }),
+      prisma.authUser.count({ where: { createdAt: { gte: prevDate, lt: date } } }),
+      prisma.authUser.count({ where: { OR: [{ subscriptionStatus: "active" }, { subscriptionStatus: "trialing" }] } }),
+      prisma.authUser.count({ where: { subscriptionTier: "pro" } }),
+      prisma.authUser.count({ where: { subscriptionTier: "premium" } }),
+      prisma.receipt.count(),
+      prisma.receipt.count({ where: { createdAt: { gte: date } } }),
+      prisma.receipt.count({ where: { createdAt: { gte: prevDate, lt: date } } }),
+      prisma.auditLog.count({ where: { eventType: 'OCR_PROCESSED', createdAt: { gte: date } } }),
+      prisma.auditLog.count({ where: { eventType: 'OCR_FAILED', createdAt: { gte: date } } })
+    ]);
+
+    const usersChange = usersPrevPeriod > 0
+      ? Math.round(((usersCurrentPeriod - usersPrevPeriod) / usersPrevPeriod) * 100)
+      : usersCurrentPeriod > 0 ? 100 : 0;
+
+    const ESTIMATED_REV = (proUsers * 10) + (premiumUsers * 20);
+
+    const receiptsChange = receiptsPrevPeriod > 0
+      ? Math.round(((receiptsCurrentPeriod - receiptsPrevPeriod) / receiptsPrevPeriod) * 100)
+      : receiptsCurrentPeriod > 0 ? 100 : 0;
+
+    const totalOcr = ocrAttempts + ocrFailures;
+    const ocrSuccessRate = totalOcr > 0 ? (ocrAttempts / totalOcr) * 100 : 100;
+
+    return {
+      totalUsers,
+      activeSubscriptions,
+      totalRevenue: ESTIMATED_REV,
+      totalReceipts,
+      usersChange,
+      revenueChange: 0,
+      receiptsChange,
+      ocrSuccessRate,
+      ocrChange: 0
+    };
+  },
+  ['admin-dashboard-stats'],
+  { revalidate: 300, tags: ['admin-stats'] }
+);
+
 export async function getDashboardStats(days: number = 30): Promise<DashboardStats> {
   await checkAdminAccess();
-
-  const now = new Date();
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-
-  const prevDate = new Date(date);
-  prevDate.setDate(prevDate.getDate() - days); // Comparison period
-
-  // 1. Total Users
-  const totalUsers = await prisma.authUser.count(); // Total is always total
-
-  // Users Change (Growth in selected period vs previous period)
-  const usersCurrentPeriod = await prisma.authUser.count({
-    where: { createdAt: { gte: date } },
-  });
-  
-  const usersPrevPeriod = await prisma.authUser.count({
-    where: { 
-      createdAt: { 
-        gte: prevDate,
-        lt: date 
-      } 
-    },
-  });
-
-  const usersChange = usersPrevPeriod > 0 
-    ? Math.round(((usersCurrentPeriod - usersPrevPeriod) / usersPrevPeriod) * 100) 
-    : usersCurrentPeriod > 0 ? 100 : 0;
-
-  // 2. Active Subscriptions
-  const activeSubscriptions = await prisma.authUser.count({
-    where: { 
-      OR: [
-        { subscriptionStatus: "active" },
-        { subscriptionStatus: "trialing" }
-      ]
-    },
-  });
-
-  // 3. Revenue
-  const proUsers = await prisma.authUser.count({ where: { subscriptionTier: "pro" } });
-  const premiumUsers = await prisma.authUser.count({ where: { subscriptionTier: "premium" } });
-  const ESTIMATED_REV = (proUsers * 10) + (premiumUsers * 20);
-  
-  // 4. Receipts Stats
-  const totalReceipts = await prisma.receipt.count();
-  
-  const receiptsCurrentPeriod = await prisma.receipt.count({
-    where: { createdAt: { gte: date } },
-  });
-  
-  const receiptsPrevPeriod = await prisma.receipt.count({
-    where: { 
-      createdAt: { 
-        gte: prevDate,
-        lt: date 
-      } 
-    },
-  });
-
-  const receiptsChange = receiptsPrevPeriod > 0
-    ? Math.round(((receiptsCurrentPeriod - receiptsPrevPeriod) / receiptsPrevPeriod) * 100)
-    : receiptsCurrentPeriod > 0 ? 100 : 0;
-
-  // 5. OCR Stats
-  const ocrAttempts = await prisma.auditLog.count({
-    where: {
-      eventType: 'OCR_PROCESSED',
-      createdAt: { gte: date }
-    },
-  });
-
-  const ocrFailures = await prisma.auditLog.count({
-    where: {
-      eventType: 'OCR_FAILED',
-      createdAt: { gte: date }
-    },
-  });
-
-  const totalOcr = ocrAttempts + ocrFailures;
-  const ocrSuccessRate = totalOcr > 0 ? (ocrAttempts / totalOcr) * 100 : 100;
-
-  return {
-    totalUsers,
-    activeSubscriptions,
-    totalRevenue: ESTIMATED_REV,
-    totalReceipts,
-    usersChange,
-    revenueChange: 0,
-    receiptsChange,
-    ocrSuccessRate,
-    ocrChange: 0 // Need historical
-  };
+  return fetchDashboardStats(days);
 }
+
+const fetchUserGrowthData = unstable_cache(
+  async (days: number): Promise<UserGrowthData[]> => {
+    const date = new Date();
+    date.setDate(date.getDate() - days);
+
+    const usersByDay = await prisma.$queryRaw<any[]>`
+      SELECT 
+        date_trunc('day', created_at) as date,
+        COUNT(*)::int as count
+      FROM auth_users
+      WHERE created_at >= ${date}
+      GROUP BY date
+      ORDER BY date ASC
+    `;
+
+    const groupedByDay: Record<string, number> = {};
+    usersByDay.forEach(row => {
+      const dateStr = new Date(row.date).toISOString().split('T')[0];
+      groupedByDay[dateStr] = row.count;
+    });
+
+    const result: UserGrowthData[] = [];
+    for (let i = 0; i < days; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() - ((days - 1) - i));
+      const dateStr = d.toISOString().split('T')[0];
+      result.push({
+        date: dateStr,
+        count: groupedByDay[dateStr] || 0
+      });
+    }
+
+    return result;
+  },
+  ['admin-user-growth'],
+  { revalidate: 3600, tags: ['admin-stats'] }
+);
 
 export async function getUserGrowthData(days: number = 30): Promise<UserGrowthData[]> {
   await checkAdminAccess();
-
-  // Get last X days
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-  
-  const users = await prisma.authUser.groupBy({
-    by: ['createdAt'],
-    where: {
-      createdAt: {
-        gte: date
-      }
-    },
-    orderBy: {
-      createdAt: 'asc'
-    }
-  });
-
-  // Aggregate by day in JS (Prisma groupBy returns distinct timestamps)
-  const groupedByDay: Record<string, number> = {};
-  
-  users.forEach(u => {
-    const day = u.createdAt.toISOString().split('T')[0];
-    groupedByDay[day] = (groupedByDay[day] || 0) + 1;
-  });
-
-  // Fill in missing days
-  const result: UserGrowthData[] = [];
-  for (let i = 0; i < days; i++) {
-    const d = new Date();
-    d.setDate(d.getDate() - ((days - 1) - i)); // Adjusted loop to go from past to present correctly
-    const dateStr = d.toISOString().split('T')[0];
-    result.push({
-      date: dateStr,
-      count: groupedByDay[dateStr] || 0
-    });
-  }
-
-  return result;
+  return fetchUserGrowthData(days);
 }
 
 export async function getReceiptActivityData(): Promise<ChartData[]> {
-    await checkAdminAccess();
-    
-    // Group receipts by status or category for a pie chart?
-    // Or just activity over last 7 days? Let's do activity over 7 days.
-    
-    const date = new Date();
-    date.setDate(date.getDate() - 7);
+  await checkAdminAccess();
 
-    const receipts = await prisma.receipt.groupBy({
-        by: ['createdAt'],
-        where: { createdAt: { gte: date } },
+  const date = new Date();
+  date.setDate(date.getDate() - 7);
+
+  const receiptsByDay = await prisma.$queryRaw<any[]>`
+        SELECT 
+            date_trunc('day', created_at) as date,
+            COUNT(*)::int as count
+        FROM receipts
+        WHERE created_at >= ${date}
+        GROUP BY date
+        ORDER BY date ASC
+    `;
+
+  const groupedByDay: Record<string, number> = {};
+  receiptsByDay.forEach(row => {
+    const dateStr = new Date(row.date).toISOString().split('T')[0];
+    groupedByDay[dateStr] = row.count;
+  });
+
+  const result: ChartData[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    const dateStr = d.toISOString().split('T')[0];
+    result.push({
+      name: dateStr,
+      value: groupedByDay[dateStr] || 0
     });
-
-    const groupedByDay: Record<string, number> = {};
-    receipts.forEach(r => {
-        const day = r.createdAt.toISOString().split('T')[0];
-        groupedByDay[day] = (groupedByDay[day] || 0) + 1;
-    });
-
-    const result: ChartData[] = [];
-    for (let i = 0; i < 7; i++) {
-        const d = new Date();
-        d.setDate(d.getDate() - (6 - i));
-        const dateStr = d.toISOString().split('T')[0];
-        result.push({
-            name: dateStr, // Shorten this in UI?
-            value: groupedByDay[dateStr] || 0
-        });
-    }
-    return result;
+  }
+  return result;
 }
 
 export async function getAnomalies(): Promise<Anomaly[]> {
@@ -247,52 +221,52 @@ export async function getAnomalies(): Promise<Anomaly[]> {
   const recentOcrFailures = await prisma.auditLog.count({
     where: { eventType: 'OCR_FAILED', createdAt: { gte: yesterday } }
   });
-  
+
   const totalRecent = recentOcrAttempts + recentOcrFailures;
   const failureRate = totalRecent > 0 ? recentOcrFailures / totalRecent : 0;
-  
+
   if (failureRate > 0.3 && totalRecent > 5) {
-      anomalies.push({
-          type: "High OCR Failure Rate",
-          description: `OCR failure rate is ${(failureRate * 100).toFixed(1)}% in the last 24h`,
-          detected_at: new Date().toISOString(),
-          severity: "high"
-      });
+    anomalies.push({
+      type: "High OCR Failure Rate",
+      description: `OCR failure rate is ${(failureRate * 100).toFixed(1)}% in the last 24h`,
+      detected_at: new Date().toISOString(),
+      severity: "high"
+    });
   }
 
   return anomalies;
 }
 
 export async function getRecentSignups() {
-    await checkAdminAccess();
-    return await prisma.authUser.findMany({
-        take: 5,
-        orderBy: { createdAt: 'desc' },
-        select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            createdAt: true,
-            subscriptionTier: true,
-            role: true
-        }
-    });
+  await checkAdminAccess();
+  return await prisma.authUser.findMany({
+    take: 5,
+    orderBy: { createdAt: 'desc' },
+    select: {
+      id: true,
+      email: true,
+      firstName: true,
+      lastName: true,
+      createdAt: true,
+      subscriptionTier: true,
+      role: true
+    }
+  });
 }
 
 export async function getActivityLogs() {
-    await checkAdminAccess();
-    return await prisma.auditLog.findMany({
-        take: 10,
-        orderBy: { createdAt: 'desc' },
-        include: {
-            user: {
-                select: {
-                    email: true
-                }
-            }
+  await checkAdminAccess();
+  return await prisma.auditLog.findMany({
+    take: 10,
+    orderBy: { createdAt: 'desc' },
+    include: {
+      user: {
+        select: {
+          email: true
         }
-    });
+      }
+    }
+  });
 }
 
 
@@ -368,7 +342,7 @@ export async function getDetailedRevenue() {
   // If no tiers in DB, use hardcoded estimates
   const proUsers = await prisma.authUser.count({ where: { subscriptionTier: "pro" } });
   const premiumUsers = await prisma.authUser.count({ where: { subscriptionTier: "premium" } });
-  
+
   // Calculate based on tiers if available, else usage default
   // Assuming 'pro' -> $10, 'premium' -> $20
   const monthlySubscriptionRevenue = (proUsers * 10) + (premiumUsers * 20);
@@ -380,7 +354,7 @@ export async function getDetailedRevenue() {
       paidAt: { not: null }
     }
   });
-  
+
   const exportRevenue = paidExports.length * 4; // $4 per export
 
   return {
