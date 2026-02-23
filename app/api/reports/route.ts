@@ -239,12 +239,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       where: {
         userId: userId,
         id: { in: receipt_ids },
-        receiptDate: {
-          gte: new Date(period_start),
-          lte: new Date(period_end)
-        }
       },
-      orderBy: { receiptDate: 'desc' }
+      orderBy: [
+        { receiptDate: 'asc' },
+        { createdAt: 'asc' }
+      ]
     });
 
     if (receipts.length === 0) {
