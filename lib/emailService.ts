@@ -793,6 +793,88 @@ export async function sendTeamInviteEmail(emailData: {
   }
 }
 
+export async function sendPointsAdjustmentEmail(emailData: {
+  to: string;
+  points: number;
+  newBalance: number;
+  reason: string;
+}): Promise<boolean> {
+  try {
+    const { to, points, newBalance, reason } = emailData;
+    const isCredit = points > 0;
+
+    const emailHtml = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Points Adjusted</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: -apple-system, sans-serif; background: #f3f4f6; padding: 40px 20px; }
+          .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+          .header { background: ${isCredit ? "#10b981" : "#ef4444"}; padding: 32px; text-align: center; color: white; }
+          .content { padding: 32px; }
+          .footer { padding: 24px; text-align: center; background: #f9fafb; color: #6b7280; font-size: 14px; }
+          .points { font-size: 32px; font-weight: 800; margin: 16px 0; color: ${isCredit ? "#10b981" : "#ef4444"}; }
+          .badge { display: inline-block; padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 600; text-transform: uppercase; background: #f3f4f6; color: #4b5563; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1 style="margin:0">${isCredit ? "Points Credited!" : "Points Debited"}</h1>
+          </div>
+          <div class="content">
+            <p>Hello,</p>
+            <p style="margin-top:16px">An administrator has adjusted your reward points balance.</p>
+            
+            <div style="text-align:center; margin: 32px 0;">
+              <div class="badge">Adjustment</div>
+              <div class="points">${isCredit ? "+" : ""}${points} Points</div>
+              <p style="color:#6b7280">New available balance: <strong>${newBalance.toLocaleString()}</strong></p>
+            </div>
+
+            <div style="background:#f9fafb; padding:16px; border-radius:8px; border-left:4px solid #d1d5db">
+              <p style="font-size:14px; color:#4b5563"><strong>Reason:</strong> ${reason}</p>
+            </div>
+
+            <p style="margin-top:32px">You can use your points to redeem rewards in the Rewards Catalog.</p>
+            
+            <div style="text-align:center; margin-top:32px">
+              <a href="${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/rewards" 
+                 style="background: #2E86DE; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-block;">
+                View Rewards Catalog
+              </a>
+            </div>
+          </div>
+          <div class="footer">
+             <p>ReimburseMe - Smart Expense Management</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const mailOptions = {
+      from: {
+        name: "ReimburseMe Rewards",
+        address: process.env.APP_EMAIL || "noreply@reimburseme.com",
+      },
+      to,
+      subject: isCredit ? `✨ Credited: ${points} points added to your account` : `Points adjustment: ${points} points`,
+      html: emailHtml,
+    };
+
+    await transport.sendMail(mailOptions);
+    return true;
+  } catch (err) {
+    console.error("Failed to send points adjustment email:", err);
+    return false;
+  }
+}
+
 export async function sendProcessingFailedEmail(emailData: {
   to: string;
   fileName: string;

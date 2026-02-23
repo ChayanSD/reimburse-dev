@@ -62,6 +62,7 @@ model AuthUser {
   @@index([subscriptionStatus], map: "idx_auth_users_subscription_status")
   @@index([stripeCustomerId], map: "idx_auth_users_stripe_customer_id")
   @@index([stripeSubscriptionId], map: "idx_auth_users_stripe_subscription_id")
+  @@index([createdAt], map: "idx_auth_users_created_at")
   @@map("auth_users")
 }
 

@@ -65,6 +65,7 @@ export default async function AdminPage({
       {tab === 'overview' && await OverviewTab({ days })}
       {tab === 'users' && await UsersTab({ page, search })}
       {tab === 'revenue' && await RevenueTab()}
+      {tab === 'rewards' && <RewardsTab />}
       {tab === 'activity' && await ActivityTab({ page })}
 
     </div>
@@ -191,7 +192,6 @@ async function OverviewTab({ days }: { days: number }) {
               </CardDescription>
             </CardHeader>
           </Card>
-          <AdminPointsAdjustment />
         </div>
       </div>
     </div>
@@ -213,6 +213,20 @@ async function UsersTab({ page, search }: { page: number, search: string }) {
 async function RevenueTab() {
   const data = await getDetailedRevenue();
   return <DetailedRevenue data={data} />;
+}
+
+async function RewardsTab() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-lg font-medium text-gray-900">Points & Rewards Management</h3>
+        <p className="text-sm text-muted-foreground">Manage user points, view balances, and adjust credit/debit.</p>
+      </div>
+      <div className="max-w-2xl">
+        <AdminPointsAdjustment />
+      </div>
+    </div>
+  );
 }
 
 async function ActivityTab({ page }: { page: number }) {
