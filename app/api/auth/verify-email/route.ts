@@ -117,6 +117,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       },
     });
 
+
+    // Convert referrer's pending signup points to available
+    try {
+      await onReferredUserVerified(updatedUser.id);
+    } catch (refError) {
+      console.error("Referral verification hook error (GET):", refError);
+    }
+
     return NextResponse.json(
       {
         message: "Email verified successfully",

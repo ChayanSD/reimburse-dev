@@ -1,10 +1,10 @@
 
 import { Metadata } from "next";
-import { 
-  checkAdminAccess, 
-  getDashboardStats, 
-  getUserGrowthData, 
-  getRecentSignups, 
+import {
+  checkAdminAccess,
+  getDashboardStats,
+  getUserGrowthData,
+  getRecentSignups,
   getActivityLogs,
   getAllUsers,
   getDetailedRevenue,
@@ -22,6 +22,7 @@ import { AdminTabs } from "./components/AdminTabs";
 import { UsersTable } from "./components/UsersTable";
 import { DetailedRevenue } from "./components/DetailedRevenue";
 import { ActivityTable } from "./components/ActivityTable";
+import { AdminPointsAdjustment } from "./components/AdminPointsAdjustment";
 
 export const metadata: Metadata = {
   title: "Admin Dashboard",
@@ -34,7 +35,7 @@ export default async function AdminPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   await checkAdminAccess();
-  
+
   const params = await searchParams;
   const days = typeof params.days === "string" ? parseInt(params.days) : 30;
   const tab = typeof params.tab === "string" ? params.tab : "overview";
@@ -60,7 +61,7 @@ export default async function AdminPage({
       </div>
 
       <AdminTabs />
-      
+
       {tab === 'overview' && await OverviewTab({ days })}
       {tab === 'users' && await UsersTab({ page, search })}
       {tab === 'revenue' && await RevenueTab()}
@@ -101,7 +102,7 @@ async function OverviewTab({ days }: { days: number }) {
             </p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Subscriptions</CardTitle>
@@ -114,7 +115,7 @@ async function OverviewTab({ days }: { days: number }) {
             </p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Receipts Processed</CardTitle>
@@ -136,7 +137,7 @@ async function OverviewTab({ days }: { days: number }) {
           <CardContent>
             <div className="text-2xl font-bold">{stats.ocrSuccessRate.toFixed(1)}%</div>
             <p className="text-xs text-muted-foreground">
-               Rate for selected period
+              Rate for selected period
             </p>
           </CardContent>
         </Card>
@@ -154,7 +155,7 @@ async function OverviewTab({ days }: { days: number }) {
             <Overview data={userGrowth} />
           </CardContent>
         </Card>
-        
+
         <Card className="col-span-3">
           <CardHeader>
             <CardTitle>Recent Signups</CardTitle>
@@ -170,25 +171,28 @@ async function OverviewTab({ days }: { days: number }) {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         <Card className="col-span-4">
-             <CardHeader>
+          <CardHeader>
             <CardTitle>Recent Activity</CardTitle>
             <CardDescription>
               Latest system events and audit logs.
             </CardDescription>
           </CardHeader>
           <CardContent>
-             <ActivityLog logs={activityLogs as any} /> 
+            <ActivityLog logs={activityLogs as any} />
           </CardContent>
         </Card>
-         <Card className="col-span-3">
-             <CardHeader>
-            <CardTitle>Total Users</CardTitle>
-             <CardTitle className="text-4xl font-bold">{stats.totalUsers.toLocaleString()}</CardTitle>
-            <CardDescription>
-               {stats.usersChange > 0 ? "+" : ""}{stats.usersChange}% since last period
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <div className="col-span-3 space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Total Users</CardTitle>
+              <CardTitle className="text-4xl font-bold">{stats.totalUsers.toLocaleString()}</CardTitle>
+              <CardDescription>
+                {stats.usersChange > 0 ? "+" : ""}{stats.usersChange}% since last period
+              </CardDescription>
+            </CardHeader>
+          </Card>
+          <AdminPointsAdjustment />
+        </div>
       </div>
     </div>
   );
@@ -197,11 +201,11 @@ async function OverviewTab({ days }: { days: number }) {
 async function UsersTab({ page, search }: { page: number, search: string }) {
   const data = await getAllUsers(page, 10, search);
   return (
-    <UsersTable 
-      users={data.users} 
-      total={data.total} 
-      pages={data.pages} 
-      currentPage={page} 
+    <UsersTable
+      users={data.users}
+      total={data.total}
+      pages={data.pages}
+      currentPage={page}
     />
   );
 }
@@ -214,11 +218,11 @@ async function RevenueTab() {
 async function ActivityTab({ page }: { page: number }) {
   const data = await getAllActivityLogs(page, 20);
   return (
-    <ActivityTable 
-       logs={data.logs}
-       total={data.total}
-       pages={data.pages}
-       currentPage={page}
+    <ActivityTable
+      logs={data.logs}
+      total={data.total}
+      pages={data.pages}
+      currentPage={page}
     />
   );
 }
