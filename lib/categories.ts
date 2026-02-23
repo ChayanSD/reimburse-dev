@@ -17,9 +17,9 @@ export interface UserCategoryData {
 
 export async function createUserCategory(
     userId: number,
-    title: string,
-    description?: string
+    itemData: { title: string; description?: string; teamId?: number }
 ) {
+    const { title, description, teamId } = itemData;
     return withKeyProtection(
         "openai",
         "category_generation",
@@ -60,6 +60,7 @@ export async function createUserCategory(
             const category = await prisma.userCategory.create({
                 data: {
                     userId,
+                    teamId: teamId || null,
                     title,
                     description,
                     keywords: validKeywords,
@@ -76,15 +77,29 @@ export async function createUserCategory(
 /**
  * Fetches user categories with aggregate usage stats.
  */
-export async function getUserCategoriesWithStats(userId: number): Promise<UserCategoryData[]> {
+export async function getUserCategoriesWithStats(userId: number, teamId?: number): Promise<UserCategoryData[]> {
+    const where: any = { userId };
+    if (teamId) {
+        where.teamId = teamId;
+    } else {
+        where.teamId = null;
+    }
+
     const categories = await prisma.userCategory.findMany({
-        where: { userId },
+        where,
         orderBy: { createdAt: 'desc' },
     });
 
+    const receiptWhere: any = { userId };
+    if (teamId) {
+        receiptWhere.teamId = teamId;
+    } else {
+        receiptWhere.teamId = null;
+    }
+
     const stats = await prisma.receipt.groupBy({
         by: ['category'],
-        where: { userId },
+        where: receiptWhere,
         _count: {
             id: true,
         },
@@ -118,14 +133,33 @@ export async function getUserCategoriesWithStats(userId: number): Promise<UserCa
 /**
  * Deletes a user category.
  */
-export async function deleteUserCategory(userId: number, categoryId: string) {
-    // Check ownership
+export async function deleteUserCategory(userId: number, categoryId: string, teamId?: number) {
+    // Check ownership or team admin rights
     const category = await prisma.userCategory.findUnique({
         where: { id: categoryId },
     });
 
-    if (!category || category.userId !== userId) {
-        throw new Error("Category not found or access denied");
+    if (!category) {
+        throw new Error("Category not found");
+    }
+
+    // Allow if:
+    // 1. It's a personal category and user owns it
+    // 2. It's a team category and user is an admin/owner of that team
+    if (category.teamId && teamId) {
+        if (category.teamId !== teamId) {
+            throw new Error("Category does not belong to this team");
+        }
+
+        const member = await prisma.teamMember.findUnique({
+            where: { teamId_userId: { teamId, userId } },
+        });
+
+        if (!member || !["OWNER", "ADMIN"].includes(member.role)) {
+            throw new Error("Forbidden - Only team admins can delete team categories");
+        }
+    } else if (category.userId !== userId) {
+        throw new Error("Access denied - You do not own this category");
     }
 
     return prisma.userCategory.delete({
@@ -136,9 +170,25 @@ export async function deleteUserCategory(userId: number, categoryId: string) {
 /**
  * Lightweight fetcher for AI prompt generation.
  */
-export async function getUserCategoriesForAI(userId: number) {
+export async function getUserCategoriesForAI(userId: number, teamId?: number) {
+    const where: any = { userId };
+    if (teamId) {
+        where.teamId = teamId;
+    } else {
+        where.teamId = null;
+    }
     return prisma.userCategory.findMany({
-        where: { userId },
+        where,
+        select: { title: true, description: true },
+    });
+}
+
+/**
+ * Fetch team categories specifically.
+ */
+export async function getTeamCategoriesForAI(teamId: number) {
+    return prisma.userCategory.findMany({
+        where: { teamId },
         select: { title: true, description: true },
     });
 }

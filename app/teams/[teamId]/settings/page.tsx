@@ -8,17 +8,19 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "react-hot-toast";
 import { SUPPORTED_CURRENCIES } from "@/lib/constants/currencies";
-import { 
-    AlertDialog, 
-    AlertDialogAction, 
-    AlertDialogCancel, 
-    AlertDialogContent, 
-    AlertDialogDescription, 
-    AlertDialogFooter, 
-    AlertDialogHeader, 
-    AlertDialogTitle, 
-    AlertDialogTrigger 
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger
 } from "@/components/ui/alert-dialog";
+
+import { TeamCategoryManagement } from "@/components/teams/TeamCategoryManagement";
 
 export default function TeamSettingsPage() {
     const { teamId } = useParams();
@@ -52,12 +54,12 @@ export default function TeamSettingsPage() {
             const res = await fetch(`/api/teams/${teamId}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                     name: teamName,
                     default_currency: teamCurrency
                 }),
             });
-            
+
             if (!res.ok) {
                 const err = await res.json();
                 throw new Error(err.error || "Failed to update settings");
@@ -74,7 +76,7 @@ export default function TeamSettingsPage() {
             const res = await fetch(`/api/teams/${teamId}`, {
                 method: "DELETE",
             });
-            
+
             if (!res.ok) {
                 const err = await res.json();
                 throw new Error(err.error || "Failed to delete team");
@@ -94,6 +96,7 @@ export default function TeamSettingsPage() {
     );
 
     const isOwner = role === "OWNER";
+    const isAdmin = role === "OWNER" || role === "ADMIN";
 
     return (
         <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
@@ -151,6 +154,8 @@ export default function TeamSettingsPage() {
                 </form>
             </Card>
 
+            <TeamCategoryManagement teamId={teamId as string} isAdmin={isAdmin} />
+
             {isOwner && (
                 <Card className="border-destructive/30 overflow-hidden">
                     <CardHeader className="bg-destructive/5">
@@ -175,8 +180,8 @@ export default function TeamSettingsPage() {
                                     <AlertDialogHeader>
                                         <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                                         <AlertDialogDescription className="space-y-2">
-                                            <p>This action <strong>cannot be undone</strong>. This will permanently delete the 
-                                            <span className="font-semibold text-foreground"> {teamName}</span> workspace and remove all data associated with it.</p>
+                                            <p>This action <strong>cannot be undone</strong>. This will permanently delete the
+                                                <span className="font-semibold text-foreground"> {teamName}</span> workspace and remove all data associated with it.</p>
                                             <p className="text-destructive font-medium">All uploaded receipts and generated reports for this team will be lost forever.</p>
                                         </AlertDialogDescription>
                                     </AlertDialogHeader>

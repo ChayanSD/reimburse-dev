@@ -64,10 +64,10 @@ export default function BatchUploadPage() {
 function BatchUploadContent() {
   const { isLoading: userLoading } = useAuth();
   const [upload] = useUpload();
-  
+
   // Get teamId from URL
   const [teamId, setTeamId] = useState<string | null>(null);
-  
+
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const tid = urlParams.get('teamId');
@@ -143,6 +143,7 @@ function BatchUploadContent() {
     mutationFn: async ({ files }: { files: { url: string; name: string }[] }) => {
       const response = await axios.post("/api/ocr/batch", {
         files,
+        teamId: teamId ? parseInt(teamId) : undefined,
       });
       return response.data;
     },
@@ -167,7 +168,7 @@ function BatchUploadContent() {
   const pollBatchStatus = async (sessionId: string, checkPayment = false) => {
     if (checkPayment) setWaitingForPayment(true);
     if (!startTime) setStartTime(new Date());
-    
+
     const pollInterval = setInterval(async () => {
       try {
         const response = await axios.get(`/api/ocr/batch/status/${sessionId}`);
@@ -179,7 +180,7 @@ function BatchUploadContent() {
         if (batchSession.status === "processing") {
           const totalFiles = batchSession.files.length;
           const completedFiles = batchSession.files.filter((f: any) => f.status === "completed" || f.status === "failed").length;
-          
+
           // Calculate progress percentage
           const baseProgress = 10; // Start at 10%
           const workProgress = totalFiles > 0 ? (completedFiles / totalFiles) * 85 : 0;
@@ -216,7 +217,7 @@ function BatchUploadContent() {
           setProcessingProgress(100);
           setProcessingStage(batchSession.status === "completed" ? "Processing complete!" : "Processing failed");
           setEstimatedTimeRemaining("");
-          
+
           if (batchSession.status === "completed") {
             // Send completion email
             emailMutation.mutate({
@@ -492,11 +493,10 @@ function BatchUploadContent() {
             /* Upload Zone */
             <div className="bg-white rounded-3xl p-8 border border-gray-200">
               <div
-                className={`relative border-2 border-dashed rounded-3xl p-12 text-center transition-colors ${
-                  dragActive
+                className={`relative border-2 border-dashed rounded-3xl p-12 text-center transition-colors ${dragActive
                     ? "border-[#2E86DE] bg-[#2E86DE] bg-opacity-5"
                     : "border-gray-300 hover:border-gray-400"
-                }`}
+                  }`}
                 onDragEnter={handleDrag}
                 onDragLeave={handleDrag}
                 onDragOver={handleDrag}
@@ -513,14 +513,12 @@ function BatchUploadContent() {
                 />
 
                 <div className="relative">
-                  <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 transition-all duration-300 ${
-                    dragActive
+                  <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 transition-all duration-300 ${dragActive
                       ? 'bg-linear-to-br from-[#2E86DE] to-[#2574C7] shadow-lg transform scale-105'
                       : 'bg-[#2E86DE]/20'
-                  }`}>
-                    <Upload size={36} className={`transition-colors duration-300 ${
-                      dragActive ? 'text-white' : 'text-[#2E86DE]'
-                    }`} />
+                    }`}>
+                    <Upload size={36} className={`transition-colors duration-300 ${dragActive ? 'text-white' : 'text-[#2E86DE]'
+                      }`} />
 
                     {/* Floating upload particles when active */}
                     {dragActive && (
@@ -554,11 +552,10 @@ function BatchUploadContent() {
 
                 <label
                   htmlFor="file-upload"
-                  className={`inline-flex items-center gap-2 px-8 py-3 font-medium rounded-2xl transition-all duration-300 cursor-pointer ${
-                    dragActive
+                  className={`inline-flex items-center gap-2 px-8 py-3 font-medium rounded-2xl transition-all duration-300 cursor-pointer ${dragActive
                       ? 'bg-[#2574C7] text-white shadow-lg transform scale-105'
                       : 'bg-[#2E86DE] hover:bg-[#2574C7] text-white hover:shadow-md'
-                  }`}
+                    }`}
                 >
                   <Upload size={18} />
                   {batchOcrMutation.isPending ? "Processing..." : "Choose Files"}
@@ -585,16 +582,15 @@ function BatchUploadContent() {
                 <div className="space-y-3">
                   {uploadedFiles.map((file) => (
                     <div key={file.id} className="flex items-center gap-4 p-3 bg-gray-50 rounded-xl">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                        file.status === 'completed' ? 'bg-green-100' :
-                        file.status === 'failed' ? 'bg-red-100' :
-                        file.status === 'processing' ? 'bg-blue-100' :
-                        'bg-gray-100'
-                      }`}>
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${file.status === 'completed' ? 'bg-green-100' :
+                          file.status === 'failed' ? 'bg-red-100' :
+                            file.status === 'processing' ? 'bg-blue-100' :
+                              'bg-gray-100'
+                        }`}>
                         {file.status === 'completed' ? <CheckCircle size={16} className="text-green-600" /> :
-                         file.status === 'failed' ? <AlertCircle size={16} className="text-red-600" /> :
-                         file.status === 'processing' ? <Clock size={16} className="text-blue-600" /> :
-                         <FileText size={16} className="text-gray-600" />}
+                          file.status === 'failed' ? <AlertCircle size={16} className="text-red-600" /> :
+                            file.status === 'processing' ? <Clock size={16} className="text-blue-600" /> :
+                              <FileText size={16} className="text-gray-600" />}
                       </div>
                       <div className="flex-1">
                         <p className="font-medium text-gray-900 truncate">{file.name}</p>
@@ -618,7 +614,7 @@ function BatchUploadContent() {
                       ) : (
                         <Receipt size={36} className="text-[#2E86DE] relative z-10 animate-pulse" />
                       )}
-                      
+
                       {!waitingForPayment && processingProgress > 0 && (
                         <>
                           <div className="absolute top-2 right-3 w-1 h-1 bg-[#2E86DE] rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
@@ -629,15 +625,15 @@ function BatchUploadContent() {
                     </div>
 
                     <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                      {waitingForPayment ? 'Verifying Payment...' : 
-                       batchSession?.status === 'processing' ? 'AI Processing in Progress' : 'Preparing Batch'}
+                      {waitingForPayment ? 'Verifying Payment...' :
+                        batchSession?.status === 'processing' ? 'AI Processing in Progress' : 'Preparing Batch'}
                     </h3>
 
                     <div className="flex items-center justify-center gap-2 mb-2">
                       <div className={`w-2 h-2 ${waitingForPayment ? 'bg-orange-500' : 'bg-[#2E86DE]'} rounded-full animate-pulse`}></div>
                       <p className="text-gray-600 font-medium">
-                        {waitingForPayment ? 'Waiting for Stripe confirmation...' : 
-                         processingStage || `Processing ${batchSession?.files.filter(f => f.status === 'completed' || f.status === 'failed').length} of ${batchSession?.files.length} files`}
+                        {waitingForPayment ? 'Waiting for Stripe confirmation...' :
+                          processingStage || `Processing ${batchSession?.files.filter(f => f.status === 'completed' || f.status === 'failed').length} of ${batchSession?.files.length} files`}
                       </p>
                     </div>
 
