@@ -119,7 +119,8 @@ export class AuthClient {
     email: string,
     password: string,
     firstName: string,
-    lastName: string
+    lastName: string,
+    referralCode?: string,
   ): Promise<{
     success: boolean;
     error?: string;
@@ -133,7 +134,7 @@ export class AuthClient {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email, password, firstName, lastName }),
+        body: JSON.stringify({ email, password, firstName, lastName, referralCode }),
       });
 
       const data = await response.json();

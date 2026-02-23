@@ -2,6 +2,7 @@
  * Seed script for Rewards system.
  * Run with: npx tsx prisma/seed-rewards.ts
  */
+import "dotenv/config";
 import prisma from "../lib/prisma";
 import { seedMissions } from "../lib/rewards/missions";
 import { seedRewardsCatalog } from "../lib/rewards/redemptions";

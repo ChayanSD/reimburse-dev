@@ -4,26 +4,52 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
     Gift,
-    CheckCircle2,
     ArrowRight,
     ShieldCheck,
     Zap,
     Star,
-    Receipt,
-    FileText,
-    Users
 } from "lucide-react";
 import Link from "next/link";
+import { authClient } from "@/lib/auth-client";
 
 export default function ReferralLandingPage() {
     const params = useParams();
     const router = useRouter();
     const code = params.code as string;
     const [redirecting, setRedirecting] = useState(false);
+    const [googleLoading, setGoogleLoading] = useState(false);
+    const [googleError, setGoogleError] = useState<string | null>(null);
+
+    // Set ref cookie as soon as the landing page loads so it's available
+    // for both email signup AND Google sign-in flows.
+    useEffect(() => {
+        if (code) {
+            document.cookie = `ref=${code}; path=/; max-age=${30 * 24 * 60 * 60}; SameSite=Lax`;
+        }
+    }, [code]);
 
     const handleJoin = () => {
         setRedirecting(true);
         router.push(`/account/signup?ref=${code}`);
+    };
+
+    const handleGoogleSignIn = async () => {
+        setGoogleLoading(true);
+        setGoogleError(null);
+        try {
+            // The ref cookie is already set above; the /api/auth/google backend
+            // will read it and attribute the referral automatically.
+            const result = await authClient.signInWithGoogle();
+            if (result.success) {
+                router.push("/dashboard");
+            } else {
+                setGoogleError(result.error || "Google sign-in failed. Please try again.");
+                setGoogleLoading(false);
+            }
+        } catch {
+            setGoogleError("Something went wrong. Please try again.");
+            setGoogleLoading(false);
+        }
     };
 
     return (
@@ -52,23 +78,59 @@ export default function ReferralLandingPage() {
                     Use code <span className="text-white font-mono font-bold bg-gray-800 px-2 py-1 rounded">{code}</span> to unlock special rewards.
                 </p>
 
-                {/* CTA Button */}
-                <button
-                    onClick={handleJoin}
-                    disabled={redirecting}
-                    className="group relative flex items-center justify-center gap-3 px-8 py-4 rounded-2xl bg-white text-black font-bold text-lg hover:bg-violet-50 transition-all active:scale-95 disabled:opacity-50 animate-in fade-in slide-in-from-bottom-10 duration-1000 shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_40px_rgba(139,92,246,0.3)]"
-                >
-                    {redirecting ? (
-                        <div className="w-6 h-6 border-2 border-black/20 border-t-black rounded-full animate-spin" />
-                    ) : (
-                        <>
-                            Accept Invitation
-                            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                        </>
-                    )}
-                </button>
+                {/* CTA Buttons */}
+                <div className="flex flex-col sm:flex-row gap-4 w-full max-w-sm animate-in fade-in slide-in-from-bottom-10 duration-1000">
+                    {/* Google Sign-In */}
+                    <button
+                        onClick={handleGoogleSignIn}
+                        disabled={googleLoading || redirecting}
+                        className="flex items-center justify-center gap-3 px-6 py-4 rounded-2xl bg-white text-gray-900 font-semibold text-base hover:bg-gray-100 transition-all active:scale-95 disabled:opacity-50 shadow-[0_0_20px_rgba(255,255,255,0.08)] flex-1"
+                    >
+                        {googleLoading ? (
+                            <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-900 rounded-full animate-spin" />
+                        ) : (
+                            <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
+                                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+                            </svg>
+                        )}
+                        {googleLoading ? "Signing in..." : "Continue with Google"}
+                    </button>
 
-                {/* Reward Highlights */}
+                    {/* Email Signup */}
+                    <button
+                        onClick={handleJoin}
+                        disabled={redirecting || googleLoading}
+                        className="group flex items-center justify-center gap-3 px-6 py-4 rounded-2xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-base transition-all active:scale-95 disabled:opacity-50 shadow-[0_0_20px_rgba(139,92,246,0.3)] hover:shadow-[0_0_40px_rgba(139,92,246,0.4)] flex-1"
+                    >
+                        {redirecting ? (
+                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : (
+                            <>
+                                Sign up with Email
+                                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                            </>
+                        )}
+                    </button>
+                </div>
+
+                {/* Already have account link */}
+                <p className="mt-5 text-sm text-gray-500 animate-in fade-in duration-1000">
+                    Already have an account?{" "}
+                    <Link href={`/account/signin`} className="text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors">
+                        Sign in here
+                    </Link>
+                </p>
+
+                {googleError && (
+                    <p className="mt-4 text-sm text-red-400 bg-red-500/10 border border-red-500/20 px-4 py-2 rounded-xl">
+                        {googleError}
+                    </p>
+                )}
+
+                {/* Feature Highlights */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-24 animate-in fade-in slide-in-from-bottom-12 duration-1000">
                     <div className="p-8 rounded-3xl bg-gray-900/50 border border-gray-800/50 backdrop-blur-sm group hover:border-violet-500/30 transition-colors">
                         <div className="w-12 h-12 rounded-2xl bg-violet-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
@@ -101,7 +163,7 @@ export default function ReferralLandingPage() {
                     </div>
                 </div>
 
-                {/* Social Proof / Trust */}
+                {/* Social Proof */}
                 <div className="mt-32 pt-12 border-t border-gray-800/50 w-full animate-in fade-in duration-1000 delay-500">
                     <p className="text-xs text-gray-500 uppercase tracking-widest mb-12">Trusted by teams at</p>
                     <div className="flex flex-wrap justify-center gap-x-16 gap-y-10 opacity-30 grayscale brightness-200">

@@ -561,28 +561,42 @@ async function handleReferralBonus(userId: number, referralCode: string) {
   }
 }
 
-// Handle charge refunded — reverse associated points
+// Handle charge refunded — reverse associated points earned by the REFERRER
 async function handleChargeRefunded(charge: Stripe.Charge) {
   console.log("Processing charge refunded:", charge.id);
 
   const customerId = charge.customer as string;
 
   try {
-    const user = await prisma.authUser.findFirst({
+    // Find the user whose charge was refunded (the referred user)
+    const referredUser = await prisma.authUser.findFirst({
       where: { stripeCustomerId: customerId },
       select: { id: true },
     });
 
-    if (!user) {
+    if (!referredUser) {
       console.error("User not found for customer ID:", customerId);
       return;
     }
 
-    // Find any points earned from paid subscription referral for this user
+    // Find the referral record to get the REFERRER's ID
+    // (referral_paid_sub ledger entries belong to the referrER, keyed by referredId as sourceId)
+    const referral = await prisma.referralTracking.findUnique({
+      where: { referredId: referredUser.id },
+      select: { referrerId: true },
+    });
+
+    if (!referral) {
+      console.log(`No referral attribution found for user ${referredUser.id}, skipping points reversal.`);
+      return;
+    }
+
+    // Find the referrer's ledger entries for this referred user's paid subscription milestone
     const referralEntries = await prisma.pointsLedger.findMany({
       where: {
+        userId: referral.referrerId,          // points belong to the REFERRER
         source: 'referral_paid_sub',
-        sourceId: String(user.id),
+        sourceId: String(referredUser.id),    // keyed by the referred user's ID
         type: 'earn',
         status: { in: ['available', 'pending'] },
       },
@@ -597,7 +611,7 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
       }
     }
 
-    console.log(`Reversed ${referralEntries.length} referral point entries for refunded charge ${charge.id}`);
+    console.log(`Reversed ${referralEntries.length} referral point entries for refunded charge ${charge.id} (referrerId=${referral.referrerId})`);
   } catch (error) {
     console.error("Error processing charge refunded:", error);
   }
