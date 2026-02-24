@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { CreateCategoryDialog } from "./CreateCategoryDialog";
 import { Loader2, Trash2, Tag, Receipt, DollarSign, Download, FileSpreadsheet, FileText as FilePdf } from "lucide-react";
@@ -45,6 +45,7 @@ interface CategoryCarouselProps {
 }
 
 export function CategoryCarousel({ onSelect, selectedCategory }: CategoryCarouselProps) {
+    const queryClient = useQueryClient();
     const { data: categories = [], isLoading, refetch } = useQuery<UserCategory[]>({
         queryKey: ["user-categories"],
         queryFn: async () => {
@@ -61,7 +62,8 @@ export function CategoryCarousel({ onSelect, selectedCategory }: CategoryCarouse
         try {
             await axios.delete(`/api/categories?categoryId=${id}`);
             toast.success("Category deleted");
-            refetch();
+            queryClient.invalidateQueries({ queryKey: ["user-categories"] });
+            queryClient.invalidateQueries({ queryKey: ["receipts"] });
         } catch (err) {
             toast.error("Failed to delete category");
             console.error(err);
