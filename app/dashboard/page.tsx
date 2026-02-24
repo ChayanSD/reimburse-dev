@@ -370,6 +370,7 @@ export default function DashboardPage() {
     mutationFn: deleteReceipt,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["receipts"] });
+      queryClient.invalidateQueries({ queryKey: ["user-categories"] });
       addToast({
         type: 'success',
         title: 'Receipt Deleted',

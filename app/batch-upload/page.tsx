@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { useAuth } from "@/lib/hooks/useAuth";
 import AuthGuard from "@/components/AuthGuard";
@@ -62,6 +62,7 @@ export default function BatchUploadPage() {
 }
 
 function BatchUploadContent() {
+  const queryClient = useQueryClient();
   const { isLoading: userLoading } = useAuth();
   const [upload] = useUpload();
 
@@ -149,6 +150,7 @@ function BatchUploadContent() {
     },
     onSuccess: (data) => {
       setBatchSession(data.batchSession);
+      queryClient.invalidateQueries({ queryKey: ['batch-sessions'] });
       // Start polling for batch status
       pollBatchStatus(data.batchSession.sessionId);
     },
@@ -494,8 +496,8 @@ function BatchUploadContent() {
             <div className="bg-white rounded-3xl p-8 border border-gray-200">
               <div
                 className={`relative border-2 border-dashed rounded-3xl p-12 text-center transition-colors ${dragActive
-                    ? "border-[#2E86DE] bg-[#2E86DE] bg-opacity-5"
-                    : "border-gray-300 hover:border-gray-400"
+                  ? "border-[#2E86DE] bg-[#2E86DE] bg-opacity-5"
+                  : "border-gray-300 hover:border-gray-400"
                   }`}
                 onDragEnter={handleDrag}
                 onDragLeave={handleDrag}
@@ -514,8 +516,8 @@ function BatchUploadContent() {
 
                 <div className="relative">
                   <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 transition-all duration-300 ${dragActive
-                      ? 'bg-linear-to-br from-[#2E86DE] to-[#2574C7] shadow-lg transform scale-105'
-                      : 'bg-[#2E86DE]/20'
+                    ? 'bg-linear-to-br from-[#2E86DE] to-[#2574C7] shadow-lg transform scale-105'
+                    : 'bg-[#2E86DE]/20'
                     }`}>
                     <Upload size={36} className={`transition-colors duration-300 ${dragActive ? 'text-white' : 'text-[#2E86DE]'
                       }`} />
@@ -553,8 +555,8 @@ function BatchUploadContent() {
                 <label
                   htmlFor="file-upload"
                   className={`inline-flex items-center gap-2 px-8 py-3 font-medium rounded-2xl transition-all duration-300 cursor-pointer ${dragActive
-                      ? 'bg-[#2574C7] text-white shadow-lg transform scale-105'
-                      : 'bg-[#2E86DE] hover:bg-[#2574C7] text-white hover:shadow-md'
+                    ? 'bg-[#2574C7] text-white shadow-lg transform scale-105'
+                    : 'bg-[#2E86DE] hover:bg-[#2574C7] text-white hover:shadow-md'
                     }`}
                 >
                   <Upload size={18} />
@@ -583,9 +585,9 @@ function BatchUploadContent() {
                   {uploadedFiles.map((file) => (
                     <div key={file.id} className="flex items-center gap-4 p-3 bg-gray-50 rounded-xl">
                       <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${file.status === 'completed' ? 'bg-green-100' :
-                          file.status === 'failed' ? 'bg-red-100' :
-                            file.status === 'processing' ? 'bg-blue-100' :
-                              'bg-gray-100'
+                        file.status === 'failed' ? 'bg-red-100' :
+                          file.status === 'processing' ? 'bg-blue-100' :
+                            'bg-gray-100'
                         }`}>
                         {file.status === 'completed' ? <CheckCircle size={16} className="text-green-600" /> :
                           file.status === 'failed' ? <AlertCircle size={16} className="text-red-600" /> :

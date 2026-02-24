@@ -341,7 +341,8 @@ function UploadContent() {
     },
     onSuccess: () => {
       setSuccess(true);
-      queryClient.invalidateQueries({ queryKey: ["receipts"] }); // This might need to invalidate team receipts too if query key differs
+      queryClient.invalidateQueries({ queryKey: ["receipts"] });
+      queryClient.invalidateQueries({ queryKey: ["user-categories"] });
       // Reset form after 2 seconds
       setTimeout(() => {
         setUploadedFile(null);
