@@ -120,11 +120,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     console.log("Price data:", priceData);
 
-    // Get current user's stripe_customer_id
+    // Get current user's stripe_customer_id and lifetime discount
     const user = await prisma.authUser.findUnique({
       where: { id: userId },
-      select: { stripeCustomerId: true },
+      select: { stripeCustomerId: true, lifetimeDiscount: true },
     });
+
+    // Adjust price if lifetime discount exists
+    const discountPercent = Number(user?.lifetimeDiscount || 0);
+    if (discountPercent > 0) {
+      const discountFactor = 1 - (discountPercent / 100);
+      priceData.unit_amount = Math.max(50, Math.round(priceData.unit_amount * discountFactor)); // Stripe min is 50 cents
+      console.log(`Applied ${discountPercent}% discount. New unit_amount: ${priceData.unit_amount}`);
+    }
 
     let stripeCustomerId = user?.stripeCustomerId;
     console.log("Existing Stripe customer ID:", stripeCustomerId || "None");

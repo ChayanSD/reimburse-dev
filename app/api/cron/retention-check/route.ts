@@ -9,8 +9,17 @@ import { triggerReferralMilestone } from "@/lib/rewards/referrals";
  * Configure in vercel.json:
  *   { "crons": [{ "path": "/api/cron/retention-check", "schedule": "0 3 * * *" }] }
  *
- * Awards RETENTION_30D milestone (+500 pts) to referrers whose referred users
- * have been subscribed for at least 30 days with no prior RETENTION_30D reward.
+ * Awards retention milestones to referrers whose referred users
+ * have been subscribed for at least 30/90 days with no prior reward.
+ */
+export const dynamic = "force-dynamic";
+
+/**
+ * GET /api/cron/retention-check
+ *
+ * Vercel Cron Job — runs daily.
+ * Awards retention milestones to referrers whose referred users
+ * have been subscribed for at least 30/90 days.
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
     // Verify cron secret to prevent unauthorized calls
@@ -24,77 +33,116 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     try {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const ninetyDaysAgo = new Date();
+        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
-        // Find active referrals where it's been 30+ days since creation
-        // and RETENTION_30D milestone hasn't been awarded yet
+        // Fetch referrals that are active or completed (completed means 90d was done, but we might still check 30d if missed)
         const eligibleReferrals = await prisma.referralTracking.findMany({
             where: {
-                status: "active",
+                status: { in: ["active", "completed"] },
                 createdAt: { lte: thirtyDaysAgo },
             },
             select: {
                 id: true,
                 referrerId: true,
                 referredId: true,
-            },
+                status: true,
+                createdAt: true,
+            }
         });
 
         let processed = 0;
-        let awarded = 0;
+        let awarded30 = 0;
+        let awarded90 = 0;
+
+        // Cache for user payment status in this run to avoid duplicate checks
+        const paymentStatusCache = new Map<number, boolean>();
+
+        const checkStillPaid = async (referredId: number) => {
+            if (paymentStatusCache.has(referredId)) return paymentStatusCache.get(referredId);
+
+            const referredUser = await prisma.authUser.findUnique({
+                where: { id: referredId },
+                select: { subscriptionTier: true, subscriptionStatus: true },
+            });
+
+            const isPaid = Boolean(
+                referredUser &&
+                referredUser.subscriptionTier !== "free" &&
+                referredUser.subscriptionStatus === "active"
+            );
+
+            paymentStatusCache.set(referredId, isPaid);
+            return isPaid;
+        };
 
         for (const referral of eligibleReferrals) {
             processed++;
-            try {
-                // Check if RETENTION_30D was already awarded for this referred user
-                const existing = await prisma.pointsLedger.findFirst({
-                    where: {
-                        userId: referral.referrerId,
-                        source: "referral_retention_30d",
-                        sourceId: String(referral.referredId),
-                        type: "earn",
-                    },
-                });
+            const isActive = referral.status === "active";
+            const isCompleted = referral.status === "completed";
+            const createdDate = new Date(referral.createdAt);
 
-                if (existing) continue; // Already awarded
+            // 1. Process 30-Day Milestone (if not already completed)
+            if (!isCompleted || isActive) { // Status "active" definitely needs checking; "completed" usually means both are done
+                try {
+                    const existing30 = await prisma.pointsLedger.findFirst({
+                        where: {
+                            userId: referral.referrerId,
+                            source: "referral_retention_30d",
+                            sourceId: String(referral.referredId),
+                            type: "earn",
+                        },
+                    });
 
-                // Confirm the referred user is still on a paid subscription
-                const referredUser = await prisma.authUser.findUnique({
-                    where: { id: referral.referredId },
-                    select: { subscriptionTier: true, subscriptionStatus: true },
-                });
-
-                if (
-                    !referredUser ||
-                    referredUser.subscriptionTier === "free" ||
-                    referredUser.subscriptionStatus !== "active"
-                ) {
-                    continue; // Not on a paid plan
+                    if (!existing30 && await checkStillPaid(referral.referredId)) {
+                        await triggerReferralMilestone(referral.referredId, "RETENTION_30D");
+                        awarded30++;
+                        console.log(`RETENTION_30D awarded: referrer=${referral.referrerId} for referred=${referral.referredId}`);
+                    }
+                } catch (err) {
+                    console.error(`Error processing 30d milestone for referral ${referral.id}:`, err);
                 }
+            }
 
-                // Trigger the retention milestone
-                await triggerReferralMilestone(referral.referredId, "RETENTION_30D");
+            // 2. Process 90-Day Milestone (if eligible and not already completed)
+            if (!isCompleted && createdDate <= ninetyDaysAgo) {
+                try {
+                    const existing90 = await prisma.pointsLedger.findFirst({
+                        where: {
+                            userId: referral.referrerId,
+                            source: "referral_retention_90d",
+                            sourceId: String(referral.referredId),
+                            type: "earn",
+                        },
+                    });
 
-                // Update referral status to completed
-                await prisma.referralTracking.update({
-                    where: { id: referral.id },
-                    data: {
-                        status: "completed",
-                        completedAt: new Date(),
-                    },
-                });
+                    if (!existing90 && await checkStillPaid(referral.referredId)) {
+                        await triggerReferralMilestone(referral.referredId, "RETENTION_90D");
 
-                awarded++;
-                console.log(`RETENTION_30D awarded: referrer=${referral.referrerId} for referred=${referral.referredId}`);
-            } catch (err) {
-                console.error(`Error processing referral ${referral.id}:`, err);
+                        // Mark referral as completed after 90 days
+                        await prisma.referralTracking.update({
+                            where: { id: referral.id },
+                            data: {
+                                status: "completed",
+                                completedAt: new Date(),
+                            },
+                        });
+
+                        awarded90++;
+                        console.log(`RETENTION_90D awarded: referrer=${referral.referrerId} for referred=${referral.referredId}`);
+                    }
+                } catch (err) {
+                    console.error(`Error processing 90d milestone for referral ${referral.id}:`, err);
+                }
             }
         }
 
         return NextResponse.json({
             success: true,
             processed,
-            awarded,
-            message: `Checked ${processed} referrals, awarded RETENTION_30D to ${awarded} referrers.`,
+            awarded30,
+            awarded90,
+            message: `Checked ${processed} referrals, awarded ${awarded30} (30d) and ${awarded90} (90d).`,
         });
     } catch (error) {
         console.error("Retention cron error:", error);

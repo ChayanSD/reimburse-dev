@@ -1,16 +1,23 @@
 import prisma from "@/lib/prisma";
 import crypto from "crypto";
-import { earnPoints, convertPendingToAvailable } from "./points";
+import { earnPoints } from "./points";
 
 // ── Referral Milestone Definitions ─────────────────────────
 
 export const REFERRAL_MILESTONES = {
-    SIGNUP: { source: "referral_signup", points: 100, pendingUntilVerified: true },
-    FIRST_RECEIPT: { source: "referral_first_receipt", points: 150 },
-    FIRST_EXPORT: { source: "referral_first_export", points: 250 },
-    PAID_SUBSCRIPTION: { source: "referral_paid_sub", points: 600, pendingDays: 14 },
-    RETENTION_30D: { source: "referral_retention_30d", points: 500 },
+    PAID_SUBSCRIPTION_PRO: { source: "referral_paid_sub_pro", points: 600 },
+    PAID_SUBSCRIPTION_PREMIUM: { source: "referral_paid_sub_premium", points: 1000 },
+    RETENTION_30D: { source: "referral_retention_30d", points: 800 },
+    RETENTION_90D: { source: "referral_retention_90d", points: 1500 },
 } as const;
+
+export type ReferralMilestoneKey = keyof typeof REFERRAL_MILESTONES;
+
+export function getPaidSubscriptionMilestoneKey(tier: string): ReferralMilestoneKey | null {
+    if (tier === "pro") return "PAID_SUBSCRIPTION_PRO";
+    if (tier === "premium") return "PAID_SUBSCRIPTION_PREMIUM";
+    return null;
+}
 
 // ── Code Generation ────────────────────────────────────────
 
@@ -65,7 +72,7 @@ export function getReferralLink(code: string): string {
  * Attribute a signup to a referrer.
  * - First-touch only (checks if already attributed)
  * - Self-referral prevention
- * - Awards pending signup points to referrer
+ * - Creates referral tracking (no points awarded at signup)
  */
 export async function attributeReferral(
     referredUserId: number,
@@ -112,14 +119,6 @@ export async function attributeReferral(
             data: { referredBy: referralCode },
         });
 
-        // Award pending signup points to referrer
-        const milestone = REFERRAL_MILESTONES.SIGNUP;
-        await earnPoints(referrer.id, milestone.points, milestone.source, {
-            status: "pending",
-            sourceId: String(referredUserId),
-            note: `Referral signup by user #${referredUserId}`,
-        });
-
         return { success: true };
     } catch (error) {
         console.error("Referral attribution error:", error);
@@ -135,7 +134,7 @@ export async function attributeReferral(
  */
 export async function triggerReferralMilestone(
     referredUserId: number,
-    milestoneKey: keyof typeof REFERRAL_MILESTONES
+    milestoneKey: ReferralMilestoneKey
 ): Promise<void> {
     const referral = await prisma.referralTracking.findUnique({
         where: { referredId: referredUserId },
@@ -169,7 +168,7 @@ export async function triggerReferralMilestone(
 }
 
 /**
- * Called when referred user verifies email → convert signup pending points.
+ * Called when referred user verifies email → mark referral active.
  */
 export async function onReferredUserVerified(referredUserId: number): Promise<void> {
     const referral = await prisma.referralTracking.findUnique({
@@ -177,12 +176,6 @@ export async function onReferredUserVerified(referredUserId: number): Promise<vo
     });
 
     if (!referral) return;
-
-    await convertPendingToAvailable(
-        referral.referrerId,
-        REFERRAL_MILESTONES.SIGNUP.source,
-        String(referredUserId)
-    );
 
     // Update referral status
     await prisma.referralTracking.update({

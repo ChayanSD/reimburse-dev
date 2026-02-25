@@ -3,7 +3,7 @@ import prisma from "@/lib/prisma";
 import { internalServerError } from "@/lib/error";
 import { getStripeInstance } from "@/lib/stripe";
 import { NextRequest, NextResponse } from "next/server";
-import { triggerReferralMilestone } from "@/lib/rewards/referrals";
+import { getPaidSubscriptionMilestoneKey, triggerReferralMilestone } from "@/lib/rewards/referrals";
 import { reversePoints } from "@/lib/rewards/points";
 
 // Initialize Stripe with environment-based key
@@ -170,7 +170,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
 
     // Handle referral bonus if applicable
     if (referralCode) {
-      await handleReferralBonus(userId, referralCode);
+      await handleReferralBonus(userId, referralCode, plan);
     }
 
     console.log(`User ${userId} successfully subscribed to ${plan} plan`);
@@ -192,7 +192,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     // Find user by Stripe customer ID
     const user = await prisma.authUser.findFirst({
       where: { stripeCustomerId: customerId },
-      select: { id: true },
+      select: { id: true, subscriptionTier: true },
     });
 
     if (!user) {
@@ -358,7 +358,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     // Find user by customer ID
     const user = await prisma.authUser.findFirst({
       where: { stripeCustomerId: customerId },
-      select: { id: true },
+      select: { id: true, subscriptionTier: true },
     });
 
     if (!user) {
@@ -391,7 +391,10 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
 
     // Rewards: trigger paid subscription referral milestone (non-blocking)
     try {
-      await triggerReferralMilestone(userId, 'PAID_SUBSCRIPTION');
+      const milestoneKey = getPaidSubscriptionMilestoneKey(user.subscriptionTier);
+      if (milestoneKey) {
+        await triggerReferralMilestone(userId, milestoneKey);
+      }
     } catch (rewardsError) {
       console.error('Rewards milestone error:', rewardsError);
     }
@@ -510,7 +513,7 @@ function determineTierFromSubscription(subscription: Stripe.Subscription): strin
   return 'pro';
 }
 
-async function handleReferralBonus(userId: number, referralCode: string) {
+async function handleReferralBonus(userId: number, referralCode: string, plan: string) {
   try {
     // Find referrer by referral code
     const referrer = await prisma.authUser.findFirst({
@@ -541,16 +544,16 @@ async function handleReferralBonus(userId: number, referralCode: string) {
         referrerId: referrerId,
         referredId: userId,
         referralCode: referralCode,
-        status: 'completed',
-        rewardType: 'free_month',
-        rewardValue: 9.99,
-        completedAt: new Date(),
+        status: 'active',
       },
     });
 
     // Trigger paid subscription referral milestone via new rewards system
     try {
-      await triggerReferralMilestone(userId, 'PAID_SUBSCRIPTION');
+      const milestoneKey = getPaidSubscriptionMilestoneKey(plan);
+      if (milestoneKey) {
+        await triggerReferralMilestone(userId, milestoneKey);
+      }
     } catch (rewardsError) {
       console.error('Rewards milestone error in referral bonus:', rewardsError);
     }
@@ -580,7 +583,7 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
     }
 
     // Find the referral record to get the REFERRER's ID
-    // (referral_paid_sub ledger entries belong to the referrER, keyed by referredId as sourceId)
+    // (referral_paid_sub_* ledger entries belong to the referrER, keyed by referredId as sourceId)
     const referral = await prisma.referralTracking.findUnique({
       where: { referredId: referredUser.id },
       select: { referrerId: true },
@@ -595,7 +598,7 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
     const referralEntries = await prisma.pointsLedger.findMany({
       where: {
         userId: referral.referrerId,          // points belong to the REFERRER
-        source: 'referral_paid_sub',
+        source: { in: ['referral_paid_sub_pro', 'referral_paid_sub_premium'] },
         sourceId: String(referredUser.id),    // keyed by the referred user's ID
         type: 'earn',
         status: { in: ['available', 'pending'] },

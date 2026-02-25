@@ -23,32 +23,67 @@ export interface RedemptionResult {
     error?: string;
 }
 
+// ── Helpers ───────────────────────────────────────────────
+
+function getRewardSubscriptionRequirements(value: Record<string, unknown>): {
+    requiresTier?: string;
+    requiresPaid?: boolean;
+} {
+    const requiresTier = typeof value.requiresTier === "string" ? value.requiresTier : undefined;
+    const requiresPaid = typeof value.requiresPaid === "boolean" ? value.requiresPaid : false;
+    return { requiresTier, requiresPaid };
+}
+
+function isSubscriptionEligible(
+    user: { subscriptionTier: string; subscriptionStatus: string } | null,
+    value: Record<string, unknown>
+): boolean {
+    const { requiresTier, requiresPaid } = getRewardSubscriptionRequirements(value);
+    if (!requiresTier && !requiresPaid) return true;
+
+    if (!user) return false;
+    const isPaid = user.subscriptionTier !== "free" && user.subscriptionStatus === "active";
+    if (requiresPaid && !isPaid) return false;
+    if (requiresTier && user.subscriptionTier !== requiresTier) return false;
+    return true;
+}
+
 // ── Catalog ────────────────────────────────────────────────
 
 /**
  * Get available rewards filtered by user's tier.
  */
 export async function getRewardsCatalog(userId: number): Promise<RewardItem[]> {
-    const [rewards, tier, balance] = await Promise.all([
+    const [rewards, tier, balance, user] = await Promise.all([
         prisma.rewardsCatalog.findMany({
             where: { isActive: true },
             orderBy: { sortOrder: "asc" },
         }),
         getUserTier(userId),
         (await import("./points")).getAvailableBalance(userId),
+        prisma.authUser.findUnique({
+            where: { id: userId },
+            select: { subscriptionTier: true, subscriptionStatus: true },
+        }),
     ]);
 
-    return rewards.map((r) => ({
-        id: r.id,
-        title: r.title,
-        description: r.description,
-        pointsCost: r.pointsCost,
-        rewardType: r.rewardType,
-        rewardValue: r.rewardValue as Record<string, unknown>,
-        minTier: r.minTier,
-        sortOrder: r.sortOrder,
-        canRedeem: tier.level >= r.minTier && balance >= r.pointsCost,
-    }));
+    return rewards.map((r) => {
+        const rewardValue = (r.rewardValue ?? {}) as Record<string, unknown>;
+        return {
+            id: r.id,
+            title: r.title,
+            description: r.description,
+            pointsCost: r.pointsCost,
+            rewardType: r.rewardType,
+            rewardValue,
+            minTier: r.minTier,
+            sortOrder: r.sortOrder,
+            canRedeem:
+                tier.level >= r.minTier &&
+                balance >= r.pointsCost &&
+                isSubscriptionEligible(user, rewardValue),
+        };
+    });
 }
 
 // ── Redemption ─────────────────────────────────────────────
@@ -80,6 +115,17 @@ export async function redeemReward(
             return { success: false, error: `Requires tier level ${reward.minTier}` };
         }
 
+        const rewardValue = (reward.rewardValue ?? {}) as Record<string, unknown>;
+
+        const user = await prisma.authUser.findUnique({
+            where: { id: userId },
+            select: { subscriptionTier: true, subscriptionStatus: true },
+        });
+
+        if (!isSubscriptionEligible(user, rewardValue)) {
+            return { success: false, error: "Not eligible for this reward with current plan" };
+        }
+
         // Spend points (will throw if insufficient)
         try {
             await spendPoints(userId, reward.pointsCost, "redemption", String(rewardId));
@@ -99,7 +145,7 @@ export async function redeemReward(
 
         // Fulfill reward
         try {
-            await fulfillReward(userId, redemption.id, reward.rewardType, reward.rewardValue as Record<string, unknown>);
+            await fulfillReward(userId, redemption.id, reward.rewardType, rewardValue);
             return { success: true, redemptionId: redemption.id };
         } catch (error) {
             console.error("Reward fulfillment failed:", error);
@@ -128,8 +174,14 @@ async function fulfillReward(
         case "stripe_credit":
             await fulfillStripeCredit(userId, redemptionId, rewardValue);
             break;
+        case "percent_off_next_invoice":
+            await fulfillPercentOffNextInvoice(userId, redemptionId, rewardValue);
+            break;
         case "free_months":
             await fulfillFreeMonths(userId, redemptionId, rewardValue);
+            break;
+        case "lifetime_discount":
+            await fulfillLifetimeDiscount(userId, redemptionId, rewardValue);
             break;
         case "feature_unlock":
             await fulfillFeatureUnlock(userId, redemptionId, rewardValue);
@@ -169,6 +221,66 @@ async function fulfillStripeCredit(
     });
 }
 
+async function fulfillPercentOffNextInvoice(
+    userId: number,
+    redemptionId: number,
+    value: Record<string, unknown>
+): Promise<void> {
+    const percent = Number(value.percent ?? 0);
+    if (!percent || percent <= 0) {
+        throw new Error("Invalid percent value for discount reward");
+    }
+
+    const user = await prisma.authUser.findUnique({
+        where: { id: userId },
+        select: { stripeCustomerId: true, subscriptionTier: true, subscriptionStatus: true },
+    });
+
+    if (!user || user.subscriptionTier === "free" || user.subscriptionStatus !== "active") {
+        throw new Error("User is not on an active paid plan");
+    }
+
+    const requiresTier = typeof value.requiresTier === "string" ? value.requiresTier : null;
+    if (requiresTier && user.subscriptionTier !== requiresTier) {
+        throw new Error("Reward requires a different subscription tier");
+    }
+
+    const tier = await prisma.subscriptionTier.findUnique({
+        where: { tierName: user.subscriptionTier },
+        select: { monthlyPriceCents: true },
+    });
+
+    if (!tier?.monthlyPriceCents) {
+        throw new Error("Unable to determine subscription price for discount reward");
+    }
+
+    const amountCents = Math.max(1, Math.round(tier.monthlyPriceCents * (percent / 100)));
+    if (!user.stripeCustomerId) {
+        throw new Error("Stripe customer not found");
+    }
+
+    const stripe = getStripeInstance();
+    await stripe.customers.createBalanceTransaction(user.stripeCustomerId, {
+        amount: -amountCents,
+        currency: "usd",
+        description: `ReimburseMe ${percent}% off next month (reward #${redemptionId})`,
+    });
+
+    await prisma.redemption.update({
+        where: { id: redemptionId },
+        data: {
+            status: "fulfilled",
+            fulfilledAt: new Date(),
+            metadata: {
+                type: "percent_off_next_invoice",
+                percent,
+                amount_cents: amountCents,
+                tier: user.subscriptionTier,
+            },
+        },
+    });
+}
+
 async function fulfillFreeMonths(
     userId: number,
     redemptionId: number,
@@ -200,6 +312,39 @@ async function fulfillFreeMonths(
     });
 }
 
+async function fulfillLifetimeDiscount(
+    userId: number,
+    redemptionId: number,
+    value: Record<string, unknown>
+): Promise<void> {
+    const percent = Number(value.percent ?? 0);
+    if (!percent || percent <= 0) {
+        throw new Error("Invalid percent value for lifetime discount reward");
+    }
+
+    const user = await prisma.authUser.findUnique({
+        where: { id: userId },
+        select: { lifetimeDiscount: true },
+    });
+
+    const current = Number(user?.lifetimeDiscount ?? 0);
+    const next = Math.max(current, percent);
+
+    await prisma.authUser.update({
+        where: { id: userId },
+        data: { lifetimeDiscount: next },
+    });
+
+    await prisma.redemption.update({
+        where: { id: redemptionId },
+        data: {
+            status: "fulfilled",
+            fulfilledAt: new Date(),
+            metadata: { type: "lifetime_discount", percent: next },
+        },
+    });
+}
+
 async function fulfillFeatureUnlock(
     _userId: number,
     redemptionId: number,
@@ -220,76 +365,67 @@ async function fulfillFeatureUnlock(
 
 export const DEFAULT_REWARDS = [
     {
-        title: "$10 Account Credit",
-        description: "Apply a $10 credit to your next invoice",
-        pointsCost: 500,
-        rewardType: "stripe_credit",
-        rewardValue: { amount_cents: 1000 },
-        minTier: 1,
+        title: "20% Off Next Month",
+        description: "One-time credit equal to 20% of your next monthly invoice",
+        pointsCost: 1000,
+        rewardType: "percent_off_next_invoice",
+        rewardValue: { percent: 20, requiresPaid: true },
+        minTier: 2,
         sortOrder: 1,
     },
     {
-        title: "1 Month Base Plan Free",
-        description: "Get one month of the Base plan for free",
-        pointsCost: 500,
-        rewardType: "free_months",
-        rewardValue: { months: 1, tier: "base" },
-        minTier: 1,
+        title: "50% Off Next Month",
+        description: "One-time credit equal to 50% of your next monthly invoice",
+        pointsCost: 2500,
+        rewardType: "percent_off_next_invoice",
+        rewardValue: { percent: 50, requiresPaid: true },
+        minTier: 3,
         sortOrder: 2,
     },
     {
-        title: "$25 Account Credit",
-        description: "Apply a $25 credit to your next invoice",
-        pointsCost: 1000,
-        rewardType: "stripe_credit",
-        rewardValue: { amount_cents: 2500 },
-        minTier: 2,
+        title: "1 Free Pro Month",
+        description: "Get one free month on the Pro plan",
+        pointsCost: 4000,
+        rewardType: "free_months",
+        rewardValue: { months: 1, requiresTier: "pro", requiresPaid: true },
+        minTier: 4,
         sortOrder: 3,
     },
     {
-        title: "1 Month Premium Free",
-        description: "Get one month of the Premium plan for free",
-        pointsCost: 1500,
-        rewardType: "free_months",
-        rewardValue: { months: 1, tier: "premium" },
-        minTier: 3,
+        title: "50% Off Premium Next Month",
+        description: "One-time credit equal to 50% of your Premium monthly invoice",
+        pointsCost: 4000,
+        rewardType: "percent_off_next_invoice",
+        rewardValue: { percent: 50, requiresTier: "premium", requiresPaid: true },
+        minTier: 4,
         sortOrder: 4,
     },
     {
-        title: "$75 Account Credit",
-        description: "Apply a $75 credit to your next invoice",
-        pointsCost: 3000,
-        rewardType: "stripe_credit",
-        rewardValue: { amount_cents: 7500 },
-        minTier: 3,
+        title: "1 Free Premium Month",
+        description: "Get one free month on the Premium plan",
+        pointsCost: 7000,
+        rewardType: "free_months",
+        rewardValue: { months: 1, requiresTier: "premium", requiresPaid: true },
+        minTier: 5,
         sortOrder: 5,
     },
     {
-        title: "3 Months Base Plan Free",
-        description: "Get three months of the Base plan for free",
-        pointsCost: 3000,
-        rewardType: "free_months",
-        rewardValue: { months: 3, tier: "base" },
-        minTier: 3,
+        title: "Ambassador Tier: 10% Recurring Commission",
+        description: "Unlock ambassador commission tracking (manual payout)",
+        pointsCost: 12000,
+        rewardType: "feature_unlock",
+        rewardValue: { feature: "ambassador_commission_10" },
+        minTier: 6,
         sortOrder: 6,
     },
     {
-        title: "6 Months Premium Free",
-        description: "Get six months of the Premium plan for free",
-        pointsCost: 6000,
-        rewardType: "free_months",
-        rewardValue: { months: 6, tier: "premium" },
-        minTier: 5,
+        title: "Ambassador Tier: 15% Lifetime Discount",
+        description: "Apply a permanent 15% discount cap to your subscription",
+        pointsCost: 12000,
+        rewardType: "lifetime_discount",
+        rewardValue: { percent: 15, requiresPaid: true },
+        minTier: 6,
         sortOrder: 7,
-    },
-    {
-        title: "$200 Account Credit",
-        description: "Apply a $200 credit to your account",
-        pointsCost: 6000,
-        rewardType: "stripe_credit",
-        rewardValue: { amount_cents: 20000 },
-        minTier: 5,
-        sortOrder: 8,
     },
 ];
 
@@ -300,6 +436,11 @@ export async function seedRewardsCatalog(): Promise<void> {
         });
         if (!existing) {
             await prisma.rewardsCatalog.create({ data: reward });
+        } else {
+            await prisma.rewardsCatalog.update({
+                where: { id: existing.id },
+                data: reward,
+            });
         }
     }
 }
