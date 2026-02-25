@@ -6,7 +6,6 @@ import { checkSubscriptionLimit, incrementUsage } from "@/lib/subscriptionGuard"
 import prisma from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { checkAndCompleteMission } from "@/lib/rewards/missions";
-import { triggerReferralMilestone } from "@/lib/rewards/referrals";
 
 
 const paginationSchema = z.object({
@@ -269,10 +268,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       team_id: teamId,
     });
 
-    // Rewards: check first_upload mission + referral milestone (non-blocking)
+    // Rewards: check first_upload mission (non-blocking)
     try {
       await checkAndCompleteMission(userId, 'first_upload');
-      await triggerReferralMilestone(userId, 'FIRST_RECEIPT');
     } catch (rewardsError) {
       console.error('Rewards hook error:', rewardsError);
     }

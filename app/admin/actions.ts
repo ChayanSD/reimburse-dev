@@ -26,6 +26,8 @@ export interface DashboardStats {
   receiptsChange: number;
   ocrSuccessRate: number;
   ocrChange: number;
+  totalPointsAwarded: number;
+  totalRedemptions: number;
 }
 
 export interface Anomaly {
@@ -62,7 +64,9 @@ const fetchDashboardStats = unstable_cache(
       receiptsCurrentPeriod,
       receiptsPrevPeriod,
       ocrAttempts,
-      ocrFailures
+      ocrFailures,
+      pointsAwarded,
+      totalRedemptions
     ] = await Promise.all([
       prisma.authUser.count(),
       prisma.authUser.count({ where: { createdAt: { gte: date } } }),
@@ -74,8 +78,12 @@ const fetchDashboardStats = unstable_cache(
       prisma.receipt.count({ where: { createdAt: { gte: date } } }),
       prisma.receipt.count({ where: { createdAt: { gte: prevDate, lt: date } } }),
       prisma.auditLog.count({ where: { eventType: 'OCR_PROCESSED', createdAt: { gte: date } } }),
-      prisma.auditLog.count({ where: { eventType: 'OCR_FAILED', createdAt: { gte: date } } })
+      prisma.auditLog.count({ where: { eventType: 'OCR_FAILED', createdAt: { gte: date } } }),
+      prisma.pointsLedger.aggregate({ where: { type: 'earn', status: 'available' }, _sum: { points: true } }),
+      prisma.redemption.count()
     ]);
+
+    const totalPointsAwarded = Number(pointsAwarded._sum.points || 0);
 
     const usersChange = usersPrevPeriod > 0
       ? Math.round(((usersCurrentPeriod - usersPrevPeriod) / usersPrevPeriod) * 100)
@@ -99,7 +107,9 @@ const fetchDashboardStats = unstable_cache(
       revenueChange: 0,
       receiptsChange,
       ocrSuccessRate,
-      ocrChange: 0
+      ocrChange: 0,
+      totalPointsAwarded,
+      totalRedemptions
     };
   },
   ['admin-dashboard-stats'],

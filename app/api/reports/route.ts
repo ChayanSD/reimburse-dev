@@ -7,7 +7,6 @@ import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import type { AuthUser, CompanySettings, Receipt } from "../../generated/prisma/client";
 import { checkAndCompleteMission } from "@/lib/rewards/missions";
-import { triggerReferralMilestone } from "@/lib/rewards/referrals";
 
 function generateCSV(receipts: Receipt[], periodStart: string, periodEnd: string) {
   const headers = ["id", "date", "merchant", "category", "amount", "currency", "note", "file_url"];
@@ -333,10 +332,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       }
     });
 
-    // Rewards: check first_export mission + referral milestone (non-blocking)
+    // Rewards: check first_export mission (non-blocking)
     try {
       await checkAndCompleteMission(userId, 'first_export');
-      await triggerReferralMilestone(userId, 'FIRST_EXPORT');
     } catch (rewardsError) {
       console.error('Rewards hook error:', rewardsError);
     }

@@ -4,10 +4,11 @@ import { getLifetimeEarned } from "./points";
 
 export const TIER_THRESHOLDS = [
     { level: 1, name: "Bronze", minPoints: 0 },
-    { level: 2, name: "Silver", minPoints: 500 },
-    { level: 3, name: "Gold", minPoints: 1500 },
-    { level: 4, name: "Platinum", minPoints: 3000 },
-    { level: 5, name: "Diamond", minPoints: 6000 },
+    { level: 2, name: "Silver", minPoints: 1000 },
+    { level: 3, name: "Gold", minPoints: 2500 },
+    { level: 4, name: "Platinum", minPoints: 4000 },
+    { level: 5, name: "Diamond", minPoints: 7000 },
+    { level: 6, name: "Ambassador", minPoints: 12000 },
 ] as const;
 
 export interface TierInfo {

@@ -106,6 +106,7 @@ const TIER_CONFIG: Record<string, { color: string; icon: string; bg: string }> =
     Gold: { color: "text-yellow-600", icon: "🥇", bg: "bg-yellow-50 border-yellow-100" },
     Platinum: { color: "text-cyan-600", icon: "💎", bg: "bg-cyan-50 border-cyan-100" },
     Diamond: { color: "text-violet-600", icon: "👑", bg: "bg-violet-50 border-violet-100" },
+    Ambassador: { color: "text-rose-600", icon: "🚀", bg: "bg-rose-50 border-rose-100" },
 };
 
 // ── Source Label Map ────────────────────────────────────────
@@ -114,10 +115,10 @@ function getSourceLabel(source: string): string {
     const map: Record<string, string> = {
         signup_referral: "Referral Signup",
         referral_signup: "Referral Signup",
-        referral_first_receipt: "Referral: First Receipt",
-        referral_first_export: "Referral: First Export",
-        referral_paid_sub: "Referral: Paid Subscription",
+        referral_paid_sub_pro: "Referral: Pro Subscription",
+        referral_paid_sub_premium: "Referral: Premium Subscription",
         referral_retention_30d: "Referral: 30-Day Retention",
+        referral_retention_90d: "Referral: 90-Day Retention",
         mission_first_upload: "Mission: First Upload",
         mission_connect_email: "Mission: Connect Email",
         mission_first_export: "Mission: First Export",
@@ -367,11 +368,17 @@ export default function RewardsPage() {
                                             <span className="text-xs font-bold uppercase tracking-wider">Referral Program</span>
                                         </div>
                                         <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-4 tracking-tight">
-                                            Refer Friends & Earn 1,600 Points
+                                            Refer Friends & Earn Up to 3,300 Points
                                         </h2>
-                                        <p className="text-gray-600 text-base mb-8 max-w-lg">
-                                            Share your referral link with colleagues and friends. You'll both earn points towards free subscriptions and account credits.
+                                        <p className="text-gray-600 text-base mb-2 max-w-lg">
+                                            Earn points through paid conversions and retention milestones:
                                         </p>
+                                        <ul className="text-gray-600 text-sm mb-6 space-y-1 list-disc list-inside">
+                                            <li>Referral becomes Pro subscriber ($9/mo): <span className="text-gray-900 font-bold">600 pts</span></li>
+                                            <li>Referral becomes Premium subscriber ($15/mo): <span className="text-gray-900 font-bold">1000 pts</span></li>
+                                            <li>Referral remains subscribed 30 days: <span className="text-gray-900 font-bold">800 pts</span></li>
+                                            <li>Referral remains subscribed 90 days: <span className="text-gray-900 font-bold">1500 pts</span></li>
+                                        </ul>
 
                                         <div className="flex flex-col sm:flex-row gap-3 mb-10">
                                             <div className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 font-mono text-sm text-gray-700 truncate flex items-center">
