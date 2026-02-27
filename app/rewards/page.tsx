@@ -410,6 +410,59 @@ export default function RewardsPage() {
                                     </div>
                                 </Card>
 
+                                {/* Ambassador Program Section */}
+                                <Card id="ambassador" className="rounded-2xl border border-rose-200 shadow-sm bg-gradient-to-br from-rose-50/50 to-transparent overflow-hidden">
+                                    <div className="px-6 py-8 sm:px-10">
+                                        <div className="flex items-center gap-2 text-rose-600 mb-6">
+                                            <Award size={20} />
+                                            <span className="text-xs font-bold uppercase tracking-wider text-rose-600">Ambassador Program</span>
+                                        </div>
+                                        <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-4 tracking-tight">
+                                            Become an <span className="text-rose-600">Official Ambassador</span>
+                                        </h2>
+                                        <p className="text-gray-600 text-base mb-6 max-w-2xl leading-relaxed">
+                                            Reach <span className="text-gray-900 font-bold">Level 6 (12,000 Lifetime Points)</span> to unlock the highest tier of partnership. 
+                                            Ambassadors are our most valued partners, helping us grow while earning significant rewards.
+                                        </p>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                                            <div className="bg-white p-5 rounded-xl border border-rose-100 shadow-sm">
+                                                <div className="w-10 h-10 bg-rose-50 text-rose-600 rounded-lg flex items-center justify-center mb-3">
+                                                    <TrendingUp size={20} />
+                                                </div>
+                                                <h4 className="font-bold text-gray-900 mb-1">10% Recurring Commission</h4>
+                                                <p className="text-xs text-gray-500">Earn a 10% cash commission on every monthly payment made by your referrals, indefinitely.</p>
+                                            </div>
+                                            <div className="bg-white p-5 rounded-xl border border-rose-100 shadow-sm">
+                                                <div className="w-10 h-10 bg-rose-50 text-rose-600 rounded-lg flex items-center justify-center mb-3">
+                                                    <Shield size={20} />
+                                                </div>
+                                                <h4 className="font-bold text-gray-900 mb-1">15% Lifetime Discount</h4>
+                                                <p className="text-xs text-gray-500">Enjoy a permanent 15% discount on your own ReimburseMe subscription for as long as you remain an ambassador.</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-4 p-4 bg-white/60 border border-rose-100 rounded-xl">
+                                            <div className="flex-1">
+                                                <div className="flex justify-between text-[10px] font-bold uppercase text-gray-400 mb-2">
+                                                    <span>Your Progress to Ambassador</span>
+                                                    <span>{Math.round((tier?.lifetimePoints || 0) / 12000 * 100)}%</span>
+                                                </div>
+                                                <div className="w-full bg-gray-100 rounded-full h-2">
+                                                    <div 
+                                                        className="h-2 rounded-full bg-rose-500 transition-all duration-1000"
+                                                        style={{ width: `${Math.min(100, (tier?.lifetimePoints || 0) / 12000 * 100)}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="shrink-0 text-right">
+                                                <p className="text-sm font-bold text-gray-900">{(tier?.lifetimePoints || 0).toLocaleString()} / 12,000</p>
+                                                <p className="text-[10px] text-gray-500 font-medium">PTS</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </Card>
+
                                 {/* Pending Missions Preview */}
                                 <div className="space-y-4">
                                     <h3 className="text-lg font-bold text-gray-900 px-1">Unlock More Points</h3>
