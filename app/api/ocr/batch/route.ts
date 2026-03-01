@@ -28,7 +28,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const validation = batchOcrRequestSchema.safeParse(body);
     if (!validation.success) return handleValidationError(validation.error);
 
-    const { files } = validation.data;
+    const { files, teamId } = validation.data;
 
     // NOTE: Batch sessions are exempted from regular subscription limits because
     // they require a one-time payment ($4) for export.
@@ -76,6 +76,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           batchSessionId: batchSession.id,
           fileIndex: i,
           userId,
+          teamId,
           file_url: file.url,
           filename: file.name,
         },

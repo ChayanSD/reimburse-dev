@@ -8,6 +8,7 @@ export type Action =
   | "update_member_role"
   | "view_all_receipts"
   | "create_receipt"
+  | "delete_receipt"
   | "approve_receipt"
   | "view_analytics"
   | "view_audit_logs";
@@ -20,6 +21,7 @@ const ROLE_PERMISSIONS: Record<TeamRole, Action[]> = {
     "update_member_role",
     "view_all_receipts",
     "create_receipt",
+    "delete_receipt",
     "approve_receipt",
     "view_analytics",
     "view_audit_logs",
@@ -29,6 +31,7 @@ const ROLE_PERMISSIONS: Record<TeamRole, Action[]> = {
     "remove_member",
     "view_all_receipts",
     "create_receipt",
+    "delete_receipt",
     "approve_receipt",
     "view_analytics",
     "view_audit_logs",

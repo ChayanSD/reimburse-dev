@@ -11,7 +11,7 @@ const handleDatabaseError = (error: unknown) => {
   console.error('Database error:', error);
   return NextResponse.json({ error: 'Database error' }, { status: 500 });
 };
-export async function GET(request: NextRequest) : Promise<NextResponse> {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const session = await getSession();
     if (!session) {
@@ -113,7 +113,7 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
   }
 }
 
-export async function DELETE(request: NextRequest) : Promise<NextResponse> {
+export async function DELETE(request: NextRequest): Promise<NextResponse> {
   try {
     const session = await getSession();
     if (!session) {
@@ -128,19 +128,37 @@ export async function DELETE(request: NextRequest) : Promise<NextResponse> {
       return NextResponse.json({ error: "Invalid receipt ID" }, { status: 400 });
     }
 
-    const deletedReceipt = await prisma.receipt.deleteMany({
-      where: {
-        id: receiptId,
-        OR: [
-          { userId: userId },
-          { team: { ownerId: userId } }
-        ]
-      },
+    const receipt = await prisma.receipt.findUnique({
+      where: { id: receiptId },
+      include: {
+        team: {
+          include: {
+            members: {
+              where: { userId: userId }
+            }
+          }
+        }
+      }
     });
 
-    if (deletedReceipt.count === 0) {
+    if (!receipt) {
       return notFound("Receipt not found");
     }
+
+    // Permission check:
+    // 1. User is the owner of the receipt
+    // 2. User is the OWNER or ADMIN of the team the receipt belongs to
+    const isOwner = receipt.userId === userId;
+    const teamMember = receipt.team?.members[0];
+    const isTeamAdmin = teamMember && (teamMember.role === "OWNER" || teamMember.role === "ADMIN");
+
+    if (!isOwner && !isTeamAdmin) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    await prisma.receipt.delete({
+      where: { id: receiptId },
+    });
 
     // Log the activity for admin tracking
     await logActivity(userId, EVENTS.RECEIPT_DELETED, {

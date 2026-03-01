@@ -12,6 +12,7 @@ export function AdminTabs() {
     { value: "overview", label: "Overview" },
     { value: "users", label: "Users" },
     { value: "revenue", label: "Revenue" },
+    { value: "rewards", label: "Rewards" },
     { value: "activity", label: "Activity" },
   ];
 

@@ -50,9 +50,17 @@ async function handler(request: NextRequest): Promise<NextResponse> {
 
     receiptId = id;
 
+    // Fetch receipt to get teamId if not provided in body (though it should be the same)
+    const receiptRecord = receiptId ? await prisma.receipt.findUnique({
+      where: { id: receiptId },
+      select: { teamId: true }
+    }) : null;
+
+    const teamId = receiptRecord?.teamId || undefined;
+
     // Extract data using AI with timeout protection
     const extractedData = await Promise.race<ExtractedData>([
-      aiOCRExtraction(file_url, filename, userId),
+      aiOCRExtraction(file_url, filename, userId, teamId),
       new Promise<ExtractedData>((_, reject) =>
         setTimeout(() => reject(new Error("OCR timeout after 100 seconds")), 100 * 1000)
       ),

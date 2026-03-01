@@ -21,6 +21,10 @@ import {
   Menu,
   X,
   LogOut,
+  Gift,
+  Coins,
+  Shield,
+  Zap,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -75,6 +79,10 @@ interface ReceiptItem {
 
 interface UserDetailsResponse {
   user: UserInfo;
+  rewards: {
+    points: { available: number; pending: number; lifetime: number };
+    tier: { name: string; level: number; progress: number; nextTierAt: number | null; nextTierName: string | null };
+  };
   stats: UserStats;
   recentActivity: ActivityItem[];
   categoryBreakdown: CategoryItem[];
@@ -221,7 +229,7 @@ export default function AdminUserDetailPage({ params }: AdminUserDetailPageProps
 
   // Error state
   if (error) {
-    const errorMessage = error.message.includes("Access denied") 
+    const errorMessage = error.message.includes("Access denied")
       ? "Access denied. Admin privileges required."
       : "Failed to fetch user data";
 
@@ -342,30 +350,30 @@ export default function AdminUserDetailPage({ params }: AdminUserDetailPageProps
                     <option value="all">All Time</option>
                   </select>
                 </div>
-              <div className="grid grid-cols-2 gap-2 mt-3">
-              <button
-                  onClick={() => {
-                    handleRefresh();
-                    setMobileMenuOpen(false);
-                  }}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#2E86DE] hover:bg-[#2574C7] text-white font-medium rounded-lg transition-colors"
-                  disabled={loading}
-                >
-                  <RefreshCw
-                    size={18}
-                    className={loading ? "animate-spin" : ""}
-                  />
-                  Refresh
-                </button>
-                <Link
-                  href="/admin"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-3 px-4 py-3 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded-lg transition-colors"
-                >
-                  <ArrowLeft size={18} />
-                  Back to Admin
-                </Link>
-              </div>
+                <div className="grid grid-cols-2 gap-2 mt-3">
+                  <button
+                    onClick={() => {
+                      handleRefresh();
+                      setMobileMenuOpen(false);
+                    }}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#2E86DE] hover:bg-[#2574C7] text-white font-medium rounded-lg transition-colors"
+                    disabled={loading}
+                  >
+                    <RefreshCw
+                      size={18}
+                      className={loading ? "animate-spin" : ""}
+                    />
+                    Refresh
+                  </button>
+                  <Link
+                    href="/admin"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded-lg transition-colors"
+                  >
+                    <ArrowLeft size={18} />
+                    Back to Admin
+                  </Link>
+                </div>
                 <Link
                   href="/account/logout"
                   onClick={() => setMobileMenuOpen(false)}
@@ -460,12 +468,11 @@ export default function AdminUserDetailPage({ params }: AdminUserDetailPageProps
                           <span className="text-xs sm:text-sm truncate">{userData.user.email}</span>
                         </div>
                         <span
-                          className={`inline-flex items-center px-2 sm:px-3 py-1 text-xs sm:text-sm font-semibold rounded-full shrink-0 ${
-                            userData.user.subscriptionTier === "pro" ||
+                          className={`inline-flex items-center px-2 sm:px-3 py-1 text-xs sm:text-sm font-semibold rounded-full shrink-0 ${userData.user.subscriptionTier === "pro" ||
                             userData.user.subscriptionTier === "premium"
-                              ? "bg-green-100 text-green-800"
-                              : "bg-gray-100 text-gray-800"
-                          }`}
+                            ? "bg-green-100 text-green-800"
+                            : "bg-gray-100 text-gray-800"
+                            }`}
                         >
                           {userData.user.subscriptionTier === "pro" ||
                             (userData.user.subscriptionTier === "premium" && (
@@ -490,10 +497,88 @@ export default function AdminUserDetailPage({ params }: AdminUserDetailPageProps
                       Joined{" "}
                       {userData.user.createdAt
                         ? new Date(
-                            userData.user.createdAt,
-                          ).toLocaleDateString()
+                          userData.user.createdAt,
+                        ).toLocaleDateString()
                         : "Unknown"}
                     </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Rewards & Tiers Status */}
+              <div className="bg-white rounded-3xl p-6 border border-gray-200 mb-6 shadow-sm">
+                <div className="flex flex-col md:flex-row gap-6">
+                  {/* Tier Info */}
+                  <div className="flex-1 space-y-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Gift className="text-violet-500" size={20} />
+                      <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">Rewards Tier</h3>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 bg-violet-50 rounded-2xl flex items-center justify-center text-2xl border border-violet-100">
+                        {userData.rewards.tier.level >= 6 ? "🚀" : userData.rewards.tier.level >= 5 ? "👑" : userData.rewards.tier.level >= 4 ? "💎" : "⭐"}
+                      </div>
+                      <div>
+                        <p className="text-2xl font-black text-gray-900">{userData.rewards.tier.name}</p>
+                        <p className="text-sm text-gray-500">Level {userData.rewards.tier.level}</p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-xs font-bold text-gray-400">
+                        <span>PROGRESS TO {userData.rewards.tier.nextTierName?.toUpperCase() || "MAX"}</span>
+                        <span>{userData.rewards.tier.progress}%</span>
+                      </div>
+                      <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-violet-500 transition-all duration-500"
+                          style={{ width: `${userData.rewards.tier.progress}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Points Breakdown */}
+                  <div className="flex-1 grid grid-cols-2 gap-4 border-l border-gray-100 pl-0 md:pl-6">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                        <Coins size={14} className="text-amber-500" />
+                        Available
+                      </div>
+                      <p className="text-2xl font-black text-gray-900">
+                        {userData.rewards.points.available.toLocaleString()}
+                        <span className="text-xs font-normal text-gray-400 ml-1">pts</span>
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                        <Zap size={14} className="text-blue-500" />
+                        Pending
+                      </div>
+                      <p className="text-2xl font-black text-gray-400">
+                        {userData.rewards.points.pending.toLocaleString()}
+                        <span className="text-xs font-normal text-gray-300 ml-1">pts</span>
+                      </p>
+                    </div>
+                    <div className="space-y-1 col-span-2 pt-2 border-t border-gray-50">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                        <Shield size={14} className="text-emerald-500" />
+                        Lifetime Earnings
+                      </div>
+                      <p className="text-xl font-bold text-gray-700">
+                        {userData.rewards.points.lifetime.toLocaleString()}
+                        <span className="text-xs font-normal text-gray-400 ml-1">pts earned total</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Action Link to Points Adjustment */}
+                  <div className="shrink-0 flex items-center">
+                    <Link
+                      href="/admin?tab=rewards"
+                      className="inline-flex items-center gap-2 px-4 py-3 bg-gray-900 hover:bg-black text-white text-sm font-bold rounded-2xl transition-all active:scale-95"
+                    >
+                      Adjust Points
+                    </Link>
                   </div>
                 </div>
               </div>
@@ -573,8 +658,8 @@ export default function AdminUserDetailPage({ params }: AdminUserDetailPageProps
                       <p className="text-lg font-bold text-[#2E86DE]">
                         {userData.stats?.lastActivity
                           ? new Date(
-                              userData.stats.lastActivity,
-                            ).toLocaleDateString()
+                            userData.stats.lastActivity,
+                          ).toLocaleDateString()
                           : "Never"}
                       </p>
                     </div>
@@ -689,7 +774,7 @@ export default function AdminUserDetailPage({ params }: AdminUserDetailPageProps
                                 {(
                                   (category.total /
                                     userData.stats?.totalAmount) *
-                                    100 || 0
+                                  100 || 0
                                 ).toFixed(1)}
                                 %
                               </p>

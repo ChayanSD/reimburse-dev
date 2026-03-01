@@ -57,7 +57,7 @@ function generateCSV(receipts: ReceiptForCSV[]): string {
 
   const csvContent = [
     headers.join(","),
-    ...rows.map((row) => 
+    ...rows.map((row) =>
       row.map((field) => `"${String(field).replace(/"/g, '""')}"`).join(",")
     ),
   ].join("\n");
@@ -124,11 +124,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           userId,
         },
         orderBy: [
-          { receiptDate: 'desc' },
-          { createdAt: 'desc' },
+          { receiptDate: 'asc' },
+          { createdAt: 'asc' },
         ],
       });
-      
+
       // Increment usage for regular report export
       await incrementUsage(userId, 'report_exports');
     }

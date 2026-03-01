@@ -14,6 +14,7 @@ export default function Header() {
     { name: "Features", href: "#features" },
     { name: "Pricing", href: "#pricing" },
     { name: "Batch Export", href: "/batch-upload" },
+    { name: "Ambassador", href: "/rewards" },
   ];
 
   return (

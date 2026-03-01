@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTokens } from "@/lib/google-auth";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { checkAndCompleteMission, MISSION_KEYS } from "@/lib/rewards/missions";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -32,6 +33,13 @@ export async function GET(req: NextRequest) {
         gmailConnectedAt: new Date(),
       },
     });
+
+    // Rewards: connect_email mission (non-blocking)
+    try {
+      await checkAndCompleteMission(session.id, MISSION_KEYS.CONNECT_EMAIL);
+    } catch (rewardsError) {
+      console.error("Rewards hook error (connect_email):", rewardsError);
+    }
 
     return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/dashboard?success=email_connected`);
   } catch (error) {

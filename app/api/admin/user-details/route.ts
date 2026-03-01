@@ -1,6 +1,8 @@
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { NextRequest, NextResponse } from "next/server";
+import { getPointsBalance } from "@/lib/rewards/points";
+import { getUserTier } from "@/lib/rewards/tiers";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
@@ -192,10 +194,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       orderBy: { createdAt: "desc" },
     });
 
+    // Get rewards info
+    const [points, tier] = await Promise.all([
+      getPointsBalance(userIdInt),
+      getUserTier(userIdInt),
+    ]);
+
     const response = {
       user: {
         ...userInfo,
         name: `${userInfo.firstName || ""} ${userInfo.lastName || ""}`.trim(),
+      },
+      rewards: {
+        points,
+        tier,
       },
       stats: {
         totalReceipts: userStats._count._all || 0,

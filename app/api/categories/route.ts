@@ -11,7 +11,11 @@ export async function GET(request: NextRequest) {
         }
 
         const userId = session.id;
-        const categories = await getUserCategoriesWithStats(userId);
+        const { searchParams } = new URL(request.url);
+        const teamIdParam = searchParams.get("teamId");
+        const teamId = teamIdParam ? parseInt(teamIdParam) : undefined;
+
+        const categories = await getUserCategoriesWithStats(userId, teamId);
         return NextResponse.json({ categories });
     } catch (error) {
         console.error("Failed to fetch categories:", error);
@@ -35,7 +39,7 @@ async function postHandler(request: NextRequest) {
             return NextResponse.json({ error: "Missing title" }, { status: 400 });
         }
 
-        const category = await createUserCategory(userId, title, description);
+        const category = await createUserCategory(userId, { title, description });
         return NextResponse.json({ category, success: true });
     } catch (error) {
         console.error("Failed to create category:", error);
