@@ -94,13 +94,13 @@ async function handler(request: NextRequest): Promise<NextResponse> {
             userId,
             fileName: filename,
             fileUrl: file_url,
-            merchantName: merchant,
-            amount: currency.amount,
-            currency: currency.currency,
+            merchantName: merchant.substring(0, 255),
+            amount: parseFloat(currency.amount.toFixed(2)),
+            currency: currency.currency.substring(0, 3),
             receiptDate: new Date(date),
-            category: extractedData.category,
+            category: extractedData.category.substring(0, 50),
             status: "completed",
-            note: extractedData.extraction_notes || "Processed successfully",
+            note: (extractedData.extraction_notes || "Processed successfully"),
           },
         });
         receiptIdToUpdate = newReceipt.id;
@@ -124,16 +124,16 @@ async function handler(request: NextRequest): Promise<NextResponse> {
     await prisma.receipt.update({
       where: { id: receiptIdToUpdate },
       data: {
-        merchantName: merchant,
-        amount: currency.amount,
-        currency: currency.currency,
+        merchantName: merchant.substring(0, 255),
+        amount: parseFloat(currency.amount.toFixed(2)),
+        currency: currency.currency.substring(0, 3),
         receiptDate: new Date(date),
-        category: extractedData.category,
+        category: extractedData.category.substring(0, 50),
         confidence,
         needsReview: confidence < 0.72,
         isDuplicate,
         status: "completed",
-        note: extractedData.extraction_notes || "Processed successfully",
+        note: (extractedData.extraction_notes || "Processed successfully"),
         updatedAt: new Date(),
       },
     });
@@ -163,7 +163,7 @@ async function handler(request: NextRequest): Promise<NextResponse> {
           where: { id: receiptId },
           data: {
             status: "failed",
-            note: `Processing failed: ${error instanceof Error ? error.message : "Unknown error"
+            note: `Processing failed: ${error instanceof Error ? error.message.substring(0, 500) : "Unknown error"
               }`,
             updatedAt: new Date(),
           },
