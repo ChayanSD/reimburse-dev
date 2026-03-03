@@ -157,6 +157,7 @@ function UploadContent() {
         amount: "",
         category: "Other",
         receipt_date: new Date().toISOString().split("T")[0],
+        currency: "USD",
       };
       setExtractedData(defaultData);
       setEditedData(defaultData);
@@ -271,6 +272,7 @@ function UploadContent() {
             amount: "",
             category: "Other",
             receipt_date: new Date().toISOString().split("T")[0],
+            currency: "USD",
           };
           setExtractedData(defaultData);
           setEditedData(defaultData);
@@ -296,6 +298,7 @@ function UploadContent() {
             amount: "",
             category: "Other",
             receipt_date: new Date().toISOString().split("T")[0],
+            currency: "USD",
           };
           setExtractedData(defaultData);
           setEditedData(defaultData);
@@ -317,6 +320,7 @@ function UploadContent() {
           amount: "",
           category: "Other",
           receipt_date: new Date().toISOString().split("T")[0],
+          currency: "USD",
         };
         setExtractedData(defaultData);
         setEditedData(defaultData);
@@ -334,6 +338,7 @@ function UploadContent() {
       amount: number;
       category: string;
       currency: string;
+      note?: string;
       teamId?: number;
     }) => {
       const response = await axios.post("/api/receipts", receiptData);
@@ -491,6 +496,7 @@ function UploadContent() {
         amount,
         category: editedData.category,
         currency: editedData.currency!,
+        note: editedData.extraction_notes,
         teamId,
       });
     } catch (err) {
@@ -802,6 +808,28 @@ function UploadContent() {
                         Receipt ID: {receiptId}
                       </p>
                     )}
+
+                    {/* Add Skip/Manual Entry Button */}
+                    <div className="mt-6 flex justify-center">
+                      <button
+                        onClick={() => {
+                          const defaultData: ExtractedData = {
+                            merchant_name: "",
+                            amount: "",
+                            category: "Other",
+                            receipt_date: new Date().toISOString().split("T")[0],
+                            currency: "USD",
+                          };
+                          setExtractedData(defaultData);
+                          setEditedData(defaultData);
+                          setProcessingStatus(null);
+                        }}
+                        className="text-sm font-medium text-[#2E86DE] hover:text-[#2574C7] underline flex items-center gap-1"
+                      >
+                        <Zap size={14} />
+                        Skip AI & Enter Manually
+                      </button>
+                    </div>
                   </div>
 
                   {/* Enhanced Progress Bar */}
@@ -925,7 +953,32 @@ function UploadContent() {
 
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Amount ($)
+                          Currency
+                        </label>
+                        <select
+                          value={editedData.currency || "USD"}
+                          onChange={(e) =>
+                            setEditedData((prev) => ({
+                              ...prev!,
+                              currency: e.target.value,
+                            }))
+                          }
+                          className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#2E86DE] focus:border-transparent"
+                        >
+                          <option value="USD">USD ($)</option>
+                          <option value="EUR">EUR (€)</option>
+                          <option value="GBP">GBP (£)</option>
+                          <option value="JPY">JPY (¥)</option>
+                          <option value="INR">INR (₹)</option>
+                          <option value="CAD">CAD (C$)</option>
+                          <option value="AUD">AUD (A$)</option>
+                          <option value="CHF">CHF (Fr)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Amount ({editedData.currency === 'USD' ? '$' : editedData.currency === 'EUR' ? '€' : editedData.currency === 'GBP' ? '£' : editedData.currency === 'JPY' ? '¥' : editedData.currency === 'INR' ? '₹' : editedData.currency === 'CAD' ? 'C$' : editedData.currency === 'AUD' ? 'A$' : editedData.currency === 'CHF' ? 'Fr' : editedData.currency})
                         </label>
                         <input
                           type="number"
@@ -989,6 +1042,23 @@ function UploadContent() {
                               <option value={editedData.category}>{editedData.category}</option>
                             )}
                         </select>
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Note (Optional)
+                        </label>
+                        <textarea
+                          value={editedData.extraction_notes || ""}
+                          onChange={(e) =>
+                            setEditedData((prev) => ({
+                              ...prev!,
+                              extraction_notes: e.target.value,
+                            }))
+                          }
+                          className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#2E86DE] focus:border-transparent min-h-[100px]"
+                          placeholder="Add any additional details or items..."
+                        />
                       </div>
                     </div>
 
