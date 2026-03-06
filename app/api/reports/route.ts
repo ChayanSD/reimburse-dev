@@ -134,7 +134,7 @@ function convertToPDFFormat(
         : [
           "Submit receipts within 30 days",
           "Business expenses only",
-          "Approval required for amounts over $100",
+          `Approval required for amounts over ${team?.defaultCurrency || companySetting?.defaultCurrency || "USD"} 100`,
         ],
       violations: [],
     },

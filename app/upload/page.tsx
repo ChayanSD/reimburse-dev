@@ -320,7 +320,7 @@ function UploadContent() {
           amount: "",
           category: "Other",
           receipt_date: new Date().toISOString().split("T")[0],
-          currency: "USD",
+          currency: "NGN", // Using NGN as a better default for this context if needed, but wait...
         };
         setExtractedData(defaultData);
         setEditedData(defaultData);
