@@ -9,6 +9,7 @@ import useUpload from "@/utils/useUpload";
 import { Receipt, Upload, FileText, Check, X, ArrowLeft, Menu, Clock, Zap, Brain, FileSearch, CheckCircle, AlertCircle } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { SUPPORTED_CURRENCIES, getCurrencySymbol } from "@/lib/constants/currencies";
 
 // TypeScript interfaces
 interface UploadedFile {
@@ -320,7 +321,7 @@ function UploadContent() {
           amount: "",
           category: "Other",
           receipt_date: new Date().toISOString().split("T")[0],
-          currency: "NGN", // Using NGN as a better default for this context if needed, but wait...
+          currency: "NGN",
         };
         setExtractedData(defaultData);
         setEditedData(defaultData);
@@ -965,20 +966,17 @@ function UploadContent() {
                           }
                           className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#2E86DE] focus:border-transparent"
                         >
-                          <option value="USD">USD ($)</option>
-                          <option value="EUR">EUR (€)</option>
-                          <option value="GBP">GBP (£)</option>
-                          <option value="JPY">JPY (¥)</option>
-                          <option value="INR">INR (₹)</option>
-                          <option value="CAD">CAD (C$)</option>
-                          <option value="AUD">AUD (A$)</option>
-                          <option value="CHF">CHF (Fr)</option>
+                          {SUPPORTED_CURRENCIES.map((currency) => (
+                            <option key={currency.code} value={currency.code}>
+                              {currency.code} ({currency.symbol})
+                            </option>
+                          ))}
                         </select>
                       </div>
 
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Amount ({editedData.currency === 'USD' ? '$' : editedData.currency === 'EUR' ? '€' : editedData.currency === 'GBP' ? '£' : editedData.currency === 'JPY' ? '¥' : editedData.currency === 'INR' ? '₹' : editedData.currency === 'CAD' ? 'C$' : editedData.currency === 'AUD' ? 'A$' : editedData.currency === 'CHF' ? 'Fr' : editedData.currency})
+                          Amount ({getCurrencySymbol(editedData.currency || "USD")})
                         </label>
                         <input
                           type="number"

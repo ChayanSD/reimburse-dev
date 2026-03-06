@@ -37,6 +37,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { getCurrencySymbol } from "@/lib/constants/currencies";
 
 interface Category {
     id: string;
@@ -294,7 +295,7 @@ export function TeamCategoryManagement({ teamId, isAdmin }: TeamCategoryManageme
                                     <div className="pt-2 flex gap-2 text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
                                         <span>{category.receiptCount} Receipts</span>
                                         <span>•</span>
-                                        <span>${category.totalSpend.toFixed(2)} Total</span>
+                                        <span>{getCurrencySymbol(team?.defaultCurrency || "USD")}{category.totalSpend.toFixed(2)} Total</span>
                                     </div>
                                 </div>
                                 <div className="flex gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
@@ -363,6 +364,6 @@ export function TeamCategoryManagement({ teamId, isAdmin }: TeamCategoryManageme
                     </div>
                 )}
             </CardContent>
-        </Card>
+        </Card >
     );
 }
