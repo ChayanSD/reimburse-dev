@@ -228,11 +228,12 @@ function normalizeCurrency(
   currency = "USD"
 ): { amount: number; currency: string; symbol: string } {
   // Extract numeric value and currency symbol
-  const numericMatch = String(amount).match(/(\d+\.?\d*)/);
+  const cleanedAmount = String(amount).replace(/,/g, "");
+  const numericMatch = cleanedAmount.match(/(\d+\.?\d*)/);
   const numericValue = numericMatch ? parseFloat(numericMatch[1]) : 0;
 
   // Detect currency symbol and normalize
-  const symbolMatch = String(amount).match(/[$€£¥₹]/);
+  const symbolMatch = String(amount).match(/[$€£¥₹₦]/);
   let detectedCurrency = currency;
 
   if (symbolMatch) {
@@ -243,6 +244,7 @@ function normalizeCurrency(
       "£": "GBP",
       "¥": "JPY",
       "₹": "INR",
+      "₦": "NGN",
     };
     detectedCurrency = symbolMap[symbol] || currency;
   }
@@ -523,7 +525,7 @@ Do NOT include explanations, markdown, or extra text.
   "category": "Meals|Travel|Supplies|Other${categoryTitles.length > 0 ? "|" + categoryTitles.join("|") : ""}",
   "receipt_date": "YYYY-MM-DD",
   "confidence": "high|medium|low",
-  "currency": "USD|EUR|GBP|JPY|INR|CAD|AUD|CHF|Other",
+  "currency": "USD|EUR|GBP|JPY|INR|NGN|CAD|AUD|CHF|Other",
   "extraction_notes": "Brief note explaining any ambiguity or inference"
 }
 `;
@@ -574,7 +576,7 @@ Return only JSON.`;
 
     // Handle currency detection and normalization
     let detectedCurrency = extractedData.currency || "USD";
-    const validCurrencies = ["USD", "EUR", "GBP", "JPY", "INR", "CAD", "AUD", "CHF", "Other"];
+    const validCurrencies = ["USD", "EUR", "GBP", "JPY", "INR", "NGN", "CAD", "AUD", "CHF", "Other"];
     if (!validCurrencies.includes(detectedCurrency)) {
       detectedCurrency = "USD";
     }
