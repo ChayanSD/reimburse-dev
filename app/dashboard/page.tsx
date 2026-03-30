@@ -397,17 +397,31 @@ export default function DashboardPage() {
     onSuccess: async (data) => {
       // For CSV or PDF, if download available, verify and download
       if (data.download_url && data.filename) {
-        const link = document.createElement("a");
-        link.href = data.download_url;
-        link.download = data.filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        // Function to detect mobile browsers
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        
+        if (isMobile) {
+          // Robust handling for mobile: instead of a hidden link, we try either 
+          // a direct location change or a new tab, which Safari is more likely to allow.
+          // Note: On mobile Safari, this often opens the file in a new tab where user can share/save.
+          window.location.assign(data.download_url);
+        } else {
+          // Standard desktop download logic
+          const link = document.createElement("a");
+          link.href = data.download_url;
+          link.download = data.filename;
+          link.style.display = 'none';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
 
         addToast({
           type: 'success',
           title: 'Report Generated',
-          message: 'Your report has been downloaded successfully.',
+          message: isMobile 
+            ? 'Your report is ready and should open shortly.' 
+            : 'Your report has been downloaded successfully.',
           duration: 3000,
         });
       } else {
@@ -623,18 +637,32 @@ export default function DashboardPage() {
       });
 
       const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `batch-export-${batchSessionId}.${format}`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      
+      if (isMobile) {
+        // Mobile Safari handles location assignment/navigation better for file downloads.
+        // Opening/assigning to a blob URL on mobile will typically show the system download prompt.
+        window.location.assign(url);
+      } else {
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `batch-export-${batchSessionId}.${format}`);
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
+
+      // Small delay before revoking to ensure navigation starts
+      setTimeout(() => window.URL.revokeObjectURL(url), 1000);
 
       addToast({
         type: 'success',
         title: 'Download Started',
-        message: `Your ${format.toUpperCase()} export has been downloaded.`,
+        message: isMobile 
+          ? `Your ${format.toUpperCase()} export is ready.` 
+          : `Your ${format.toUpperCase()} export has been downloaded.`,
         duration: 3000,
       });
     } catch (err) {

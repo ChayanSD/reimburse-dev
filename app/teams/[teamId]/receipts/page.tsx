@@ -177,12 +177,24 @@ export default function TeamReceiptsPage() {
 
       // 3. Trigger Download
       const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `team_${teamId}_report.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      
+      if (isMobile) {
+        // Mobile browsers: direct navigation to blob works better for downloads
+        window.location.assign(url);
+      } else {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `team_${teamId}_report.pdf`;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+
+      // Small delay before revoking to ensure navigation starts successfully
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
 
       toast.success(`Exported ${dataToExport.length} receipts to PDF`);
     } catch (error) {
