@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useState } from "react";
 import toast from "react-hot-toast";
+import { isIOSSafari, submitPostDownload } from "@/utils/download";
 
 interface UserCategory {
     id: string;
@@ -122,6 +123,15 @@ export function CategoryCarousel({ onSelect, selectedCategory }: CategoryCarouse
                         file_url: r.file_url,
                     })),
                 };
+
+                if (isIOSSafari()) {
+                    submitPostDownload("/api/exports/pdf", {
+                        data: JSON.stringify(reportData),
+                        skipUsage: "1",
+                    });
+                    toast.success("Your PDF download should start in Safari in a new tab");
+                    return;
+                }
 
                 const blob = await pdf(<ReimburseMePDFDocument data={reportData} />).toBlob();
                 const url = URL.createObjectURL(blob);

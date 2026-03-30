@@ -23,6 +23,42 @@ const pdfRequestSchema = z.object({
   data: z.any(),
 });
 
+function getStringValue(value: FormDataEntryValue | null): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+async function parsePdfRequestBody(request: NextRequest): Promise<{
+  batchSessionId: string | null;
+  teamId: string | null;
+  data: unknown;
+  skipUsage: boolean;
+}> {
+  const contentType = request.headers.get("content-type") || "";
+
+  if (
+    contentType.includes("application/x-www-form-urlencoded") ||
+    contentType.includes("multipart/form-data")
+  ) {
+    const formData = await request.formData();
+    const rawData = getStringValue(formData.get("data"));
+
+    return {
+      batchSessionId: getStringValue(formData.get("batchSessionId")),
+      teamId: getStringValue(formData.get("teamId")),
+      data: rawData ? JSON.parse(rawData) : null,
+      skipUsage: getStringValue(formData.get("skipUsage")) === "1",
+    };
+  }
+
+  const body = await request.json();
+  return {
+    batchSessionId: body.batchSessionId ?? null,
+    teamId: body.teamId ?? null,
+    data: body.data ?? null,
+    skipUsage: body.skipUsage === true,
+  };
+}
+
 export async function GET(): Promise<NextResponse> {
   return NextResponse.json({
     message: "PDF Export API",
@@ -46,8 +82,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { batchSessionId, teamId } = body;
+    const { batchSessionId, teamId, data, skipUsage } = await parsePdfRequestBody(request);
 
     let expenseData: ExpenseReportData;
 
@@ -198,12 +233,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       };
     } else {
       // Regular export - check subscription and validate request structure for custom data
-      const subscriptionCheck = await checkSubscriptionLimit(session.id, 'report_exports');
-      if (!subscriptionCheck.allowed) {
-        return subscriptionLimitReached('Reports', 0, 0, '/plans');
+      if (!skipUsage) {
+        const subscriptionCheck = await checkSubscriptionLimit(session.id, 'report_exports');
+        if (!subscriptionCheck.allowed) {
+          return subscriptionLimitReached('Reports', 0, 0, '/plans');
+        }
       }
 
-      const validation = pdfRequestSchema.safeParse(body);
+      const validation = pdfRequestSchema.safeParse({ data });
       if (!validation.success) {
         return NextResponse.json(
           { error: "Invalid request format", details: validation.error.issues },
@@ -211,10 +248,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         );
       }
 
-      expenseData = body.data as ExpenseReportData;
+      expenseData = data as ExpenseReportData;
 
       // Increment usage for regular report export
-      await incrementUsage(session.id, 'report_exports');
+      if (!skipUsage) {
+        await incrementUsage(session.id, 'report_exports');
+      }
     }
 
     // Generate PDF
