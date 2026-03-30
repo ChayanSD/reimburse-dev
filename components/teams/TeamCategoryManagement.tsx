@@ -38,6 +38,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { getCurrencySymbol } from "@/lib/constants/currencies";
+import { isIOSSafari, submitPostDownload } from "@/utils/download";
 
 interface Category {
     id: string;
@@ -195,6 +196,15 @@ export function TeamCategoryManagement({ teamId, isAdmin }: TeamCategoryManageme
                         file_url: r.file_url,
                     })),
                 };
+
+                if (isIOSSafari()) {
+                    submitPostDownload("/api/exports/pdf", {
+                        data: JSON.stringify(reportData),
+                        skipUsage: "1",
+                    });
+                    toast.success("Your PDF download should start in Safari in a new tab");
+                    return;
+                }
 
                 const blob = await pdf(<ReimburseMePDFDocument data={reportData} />).toBlob();
                 const url = URL.createObjectURL(blob);

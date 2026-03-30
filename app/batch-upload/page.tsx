@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { useAuth } from "@/lib/hooks/useAuth";
 import AuthGuard from "@/components/AuthGuard";
+import { isIOSSafari, submitPostDownload } from "@/utils/download";
 import useUpload from "@/utils/useUpload";
 import {
   Receipt,
@@ -367,6 +368,20 @@ function BatchUploadContent() {
 
   const handleExport = async (format: 'csv' | 'pdf') => {
     if (!batchSession) return;
+
+    if (format === "pdf" && isIOSSafari()) {
+      const fields: Record<string, string> = {
+        batchSessionId: batchSession.sessionId,
+      };
+
+      if (teamId) {
+        fields.teamId = teamId;
+      }
+
+      submitPostDownload("/api/exports/pdf", fields);
+      setError(null);
+      return;
+    }
 
     try {
       const response = await axios.post(`/api/exports/${format}`, {

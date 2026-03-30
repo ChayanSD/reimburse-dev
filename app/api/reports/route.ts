@@ -8,6 +8,69 @@ import { getSession } from "@/lib/session";
 import type { AuthUser, CompanySettings, Receipt } from "../../generated/prisma/client";
 import { checkAndCompleteMission } from "@/lib/rewards/missions";
 
+function getStringValue(value: FormDataEntryValue | null): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function parseOptionalNumber(value: string | null): number | null | undefined {
+  if (value === null) {
+    return undefined;
+  }
+
+  if (value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseBoolean(value: string | null): boolean {
+  return value === "1" || value === "true";
+}
+
+function parseOptionalBoolean(value: string | null): boolean | undefined {
+  if (value === null) {
+    return undefined;
+  }
+
+  return parseBoolean(value);
+}
+
+async function parseReportRequest(request: NextRequest): Promise<{
+  data: unknown;
+  downloadDirectly: boolean;
+}> {
+  const contentType = request.headers.get("content-type") || "";
+
+  if (
+    contentType.includes("application/x-www-form-urlencoded") ||
+    contentType.includes("multipart/form-data")
+  ) {
+    const formData = await request.formData();
+    const rawReceiptIds = getStringValue(formData.get("receipt_ids"));
+
+    return {
+      data: {
+        receipt_ids: rawReceiptIds ? JSON.parse(rawReceiptIds) : [],
+        period_start: getStringValue(formData.get("period_start")),
+        period_end: getStringValue(formData.get("period_end")),
+        title: getStringValue(formData.get("title")) || undefined,
+        include_items: parseOptionalBoolean(getStringValue(formData.get("include_items"))),
+        format: getStringValue(formData.get("format")),
+        company_setting_id: parseOptionalNumber(getStringValue(formData.get("company_setting_id"))),
+        team_id: parseOptionalNumber(getStringValue(formData.get("team_id"))),
+      },
+      downloadDirectly: parseBoolean(getStringValue(formData.get("download"))),
+    };
+  }
+
+  return {
+    data: await request.json(),
+    downloadDirectly: false,
+  };
+}
+
 function generateCSV(receipts: Receipt[], periodStart: string, periodEnd: string) {
   const headers = ["id", "date", "merchant", "category", "amount", "currency", "note", "file_url"];
   const rows = receipts.map((receipt) => [
@@ -201,10 +264,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const body = await request.json();
+    const { data: requestData, downloadDirectly } = await parseReportRequest(request);
 
     // Validate input with Zod
-    const validation = reportCreateSchema.safeParse(body);
+    const validation = reportCreateSchema.safeParse(requestData);
     if (!validation.success) {
       return handleValidationError(validation.error);
     }
@@ -280,6 +343,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     let mimeType;
     let filename;
     let reportUrl;
+    let pdfBuffer: Buffer | null = null;
 
     if (format === "csv") {
       reportData = generateCSV(receipts, period_start, period_end);
@@ -314,6 +378,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
       // Generate PDF using React-PDF (Vercel-compatible)
       const pdfResult = await generatePDF(pdfData, { userId: userId.toString() });
+      pdfBuffer = pdfResult.pdfBuffer;
       reportUrl = pdfResult.pdf_url;
       mimeType = "application/pdf";
     }
@@ -337,6 +402,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       await checkAndCompleteMission(userId, 'first_export');
     } catch (rewardsError) {
       console.error('Rewards hook error:', rewardsError);
+    }
+
+    if (downloadDirectly && format === "pdf" && pdfBuffer) {
+      return new NextResponse(new Uint8Array(pdfBuffer), {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${filename}"`,
+        },
+      });
     }
 
     return NextResponse.json({

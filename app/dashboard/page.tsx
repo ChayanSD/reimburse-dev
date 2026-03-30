@@ -4,6 +4,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import useUser from "@/utils/useUser";
+import { isIOSSafari, submitPostDownload } from "@/utils/download";
 import useSubscription from "@/lib/hooks/useSubscription";
 import { getCurrencySymbol } from "@/lib/utils";
 import {
@@ -625,10 +626,44 @@ export default function DashboardPage() {
       format,
       company_setting_id: selectedCompanySetting, // Already a number
     };
+
+    if (format === "pdf" && isIOSSafari()) {
+      submitPostDownload("/api/reports", {
+        receipt_ids: JSON.stringify(reportData.receipt_ids),
+        period_start: reportData.period_start,
+        period_end: reportData.period_end,
+        format: reportData.format,
+        company_setting_id: reportData.company_setting_id?.toString() ?? "",
+        download: "1",
+      });
+
+      addToast({
+        type: "success",
+        title: "Preparing PDF",
+        message: "Your PDF download should start in Safari in a new tab.",
+        duration: 4000,
+      });
+      return;
+    }
+
     reportMutation.mutate(reportData);
   };
 
   const handleDownloadPurchasedExport = async (format: 'csv' | 'pdf', batchSessionId: string) => {
+    if (format === "pdf" && isIOSSafari()) {
+      submitPostDownload("/api/exports/pdf", {
+        batchSessionId,
+      });
+
+      addToast({
+        type: "success",
+        title: "Preparing PDF",
+        message: "Your PDF download should start in Safari in a new tab.",
+        duration: 4000,
+      });
+      return;
+    }
+
     try {
       const response = await axios.post(`/api/exports/${format}`, {
         batchSessionId,

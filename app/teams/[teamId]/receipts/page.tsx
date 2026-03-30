@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "react-hot-toast";
 import { generateCSV, downloadCSV } from "@/utils/csvGenerator";
+import { isIOSSafari, submitPostDownload } from "@/utils/download";
 import { pdf } from "@react-pdf/renderer";
 import { ReimburseMePDFDocument } from "@/utils/reactPdfTemplates";
 
@@ -171,6 +172,15 @@ export default function TeamReceiptsPage() {
           file_url: r.file_url,
         })),
       };
+
+      if (isIOSSafari()) {
+        submitPostDownload("/api/exports/pdf", {
+          data: JSON.stringify(reportData),
+          skipUsage: "1",
+        });
+        toast.success("Your PDF download should start in Safari in a new tab");
+        return;
+      }
 
       // 2. Generate Blob
       const blob = await pdf(<ReimburseMePDFDocument data={reportData} />).toBlob();
