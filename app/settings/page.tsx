@@ -68,13 +68,23 @@ const useDownloadData = () => {
     onSuccess: (data) => {
       // Create download link
       const url = window.URL.createObjectURL(data);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `reimburseme-data-${new Date().toISOString().split('T')[0]}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      
+      if (isMobile) {
+        // Mobile Safari handles location assignment/navigation better for file downloads.
+        window.location.assign(url);
+      } else {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `reimburseme-data-${new Date().toISOString().split('T')[0]}.csv`;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+
+      // Small delay before revoking to ensure navigation starts
+      setTimeout(() => window.URL.revokeObjectURL(url), 1000);
     },
   });
 };

@@ -377,13 +377,24 @@ function BatchUploadContent() {
       });
 
       const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `batch-export-${batchSession.sessionId}.${format}`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      
+      if (isMobile) {
+        // Mobile browsers: direct navigation to blob works better for downloads
+        window.location.assign(url);
+      } else {
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `batch-export-${batchSession.sessionId}.${format}`);
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
+
+      // Small delay before revoking to ensure navigation starts successfully
+      setTimeout(() => window.URL.revokeObjectURL(url), 1000);
     } catch (err) {
       console.error("Export error:", err);
       setError("Failed to export. Please ensure payment is completed.");
